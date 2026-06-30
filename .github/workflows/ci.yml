@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  push:
+
+jobs:
+  backend:
+    name: Backend (ruff + pytest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ledgerpro_backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            ledgerpro_backend/requirements.txt
+            ledgerpro_backend/requirements-dev.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Ruff lint
+        run: ruff check .
+
+      - name: Pytest
+        env:
+          USE_SQLITE: "True"
+          SECRET_KEY: ci-test-secret-key-not-for-production
+          DEBUG: "False"
+          ALLOWED_HOSTS: localhost,127.0.0.1,testserver
+        run: pytest -v
+
+  frontend:
+    name: Frontend (eslint + tsc + build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ledgerpro_frontend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: ledgerpro_frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: ESLint
+        run: npm run lint
+
+      - name: TypeScript
+        run: npm run type-check
+
+      - name: Build
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:8000
+        run: npm run build

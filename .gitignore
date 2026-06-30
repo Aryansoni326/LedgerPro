@@ -1,0 +1,94 @@
+# =============================================================================
+# Environment & secrets
+# =============================================================================
+.env
+.env.*
+!.env.example
+
+# =============================================================================
+# Python
+# =============================================================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+
+# Django
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+ledgerpro_backend/db.sqlite3
+ledgerpro_backend/media/
+ledgerpro_backend/staticfiles/
+.pytest_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+
+# =============================================================================
+# Node.js / Next.js
+# =============================================================================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+ledgerpro_frontend/.next/
+ledgerpro_frontend/out/
+ledgerpro_frontend/build/
+ledgerpro_frontend/.vercel
+ledgerpro_frontend/*.tsbuildinfo
+
+# =============================================================================
+# Docker volumes & local runtime data
+# =============================================================================
+postgres_data/
+redis_data/
+docker-data/
+
+# =============================================================================
+# IDE & OS
+# =============================================================================
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# =============================================================================
+# Misc
+# =============================================================================
+*.pem
+.cursor/
