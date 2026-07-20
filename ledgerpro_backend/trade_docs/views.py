@@ -217,7 +217,7 @@ def manage_trade_doc(request, pk):
         record.be_number = str(existing.get('be_number') or '')[:100] or None
         record.be_date = be_date_parsed
         record.port_code = str(existing.get('port_code') or '')[:20] or None
-        record.container_id = str(existing.get('container_id') or '')[:100] or None
+        record.container_id = str(existing.get('container_id') or '')[:1000] or None
         record.gross_weight = _safe_float(existing.get('gross_weight')) or None
         record.net_weight = _safe_float(existing.get('net_weight')) or None
         record.currency = str(existing.get('currency') or '')[:10] or None

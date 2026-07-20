@@ -19,7 +19,7 @@ const INDIAN_STATES = [
 ];
 
 export default function AddFirmModal({ isOpen, onClose }: AddFirmModalProps) {
-  const { token, fetchFirms, setSelectedFirm } = useAuth();
+  const { token, fetchFirms, setSelectedFirm, logout } = useAuth();
   const [step, setStep] = useState<1 | 2>(1);
   const [name, setName] = useState('');
   const [gstin, setGstin] = useState('');
@@ -30,7 +30,7 @@ export default function AddFirmModal({ isOpen, onClose }: AddFirmModalProps) {
   // OTP states
   const [firmId, setFirmId] = useState<number | null>(null);
   const [pendingToken, setPendingToken] = useState('');
-  const [otpCode, setOtpCode] = useState(['', '', '', '']);
+  const [otpCode, setOtpCode] = useState(['', '', '', '', '', '']);
   const [countdown, setCountdown] = useState(300);
   
   // Feedback states
@@ -39,6 +39,8 @@ export default function AddFirmModal({ isOpen, onClose }: AddFirmModalProps) {
   const [loading, setLoading] = useState(false);
 
   const otpRefs = [
+    useRef<HTMLInputElement>(null),
+    useRef<HTMLInputElement>(null),
     useRef<HTMLInputElement>(null),
     useRef<HTMLInputElement>(null),
     useRef<HTMLInputElement>(null),
@@ -56,7 +58,7 @@ export default function AddFirmModal({ isOpen, onClose }: AddFirmModalProps) {
       setOwnerEmail('');
       setFirmId(null);
       setPendingToken('');
-      setOtpCode(['', '', '', '']);
+      setOtpCode(['', '', '', '', '', '']);
       setError('');
       setFieldErrors({});
       setLoading(false);
@@ -75,7 +77,7 @@ export default function AddFirmModal({ isOpen, onClose }: AddFirmModalProps) {
   // Auto trigger verification
   useEffect(() => {
     const codeStr = otpCode.join('');
-    if (codeStr.length === 4 && firmId && pendingToken) {
+    if (codeStr.length === 6 && firmId && pendingToken) {
       handleVerifyOtp(codeStr);
     }
   }, [otpCode, firmId, pendingToken]);
@@ -128,6 +130,11 @@ export default function AddFirmModal({ isOpen, onClose }: AddFirmModalProps) {
 
       const data = await res.json();
       if (!res.ok) {
+        if (res.status === 401 || res.status === 403) {
+          logout();
+          onClose();
+          return;
+        }
         if (data.errors) {
           setFieldErrors(data.errors);
         } else {
@@ -169,8 +176,13 @@ export default function AddFirmModal({ isOpen, onClose }: AddFirmModalProps) {
 
       const data = await res.json();
       if (!res.ok) {
+        if (res.status === 401 || res.status === 403) {
+          logout();
+          onClose();
+          return;
+        }
         setError(data.error || 'Verification failed.');
-        setOtpCode(['', '', '', '']);
+        setOtpCode(['', '', '', '', '', '']);
         otpRefs[0].current?.focus();
         return;
       }
@@ -216,13 +228,18 @@ export default function AddFirmModal({ isOpen, onClose }: AddFirmModalProps) {
 
       const data = await res.json();
       if (!res.ok) {
+        if (res.status === 401 || res.status === 403) {
+          logout();
+          onClose();
+          return;
+        }
         setError(data.error || 'Failed to resend code.');
         return;
       }
 
       setPendingToken(data.pending_token);
       setCountdown(300);
-      setOtpCode(['', '', '', '']);
+      setOtpCode(['', '', '', '', '', '']);
       otpRefs[0].current?.focus();
       setError('');
     } catch (err) {
@@ -239,7 +256,7 @@ export default function AddFirmModal({ isOpen, onClose }: AddFirmModalProps) {
     newCode[index] = val;
     setOtpCode(newCode);
 
-    if (val && index < 3) {
+    if (val && index < 5) {
       otpRefs[index + 1].current?.focus();
     }
   };
@@ -383,7 +400,7 @@ export default function AddFirmModal({ isOpen, onClose }: AddFirmModalProps) {
               </div>
               <h2 className="text-2xl font-bold tracking-tight">Verify Owner Email</h2>
               <p className="text-sm text-text-secondary max-w-sm mx-auto">
-                A 4-digit verification code has been sent to <span className="font-mono text-text-primary font-semibold">{ownerEmail}</span>. Enter code below to activate firm.
+                A 6-digit verification code has been sent to <span className="font-mono text-text-primary font-semibold">{ownerEmail}</span>. Enter code below to activate firm.
               </p>
             </div>
 

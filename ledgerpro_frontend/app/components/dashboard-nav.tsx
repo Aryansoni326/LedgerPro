@@ -7,18 +7,18 @@ import {
   Globe,
   Truck,
   Database,
-  Settings as SettingsIcon,
+  Activity,
 } from 'lucide-react';
 
-export type TabType = 'overview' | 'invoices' | 'import-export' | 'e-way-bills' | 'vault' | 'settings';
+export type TabType = 'overview' | 'activity' | 'invoices' | 'import-export' | 'e-way-bills' | 'vault' | 'settings';
 
 const NAV_ITEMS: { id: TabType; label: string; icon: React.ElementType }[] = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
+  { id: 'activity', label: 'Activity', icon: Activity },
   { id: 'invoices', label: 'Invoices', icon: FileText },
   { id: 'import-export', label: 'Import-Export', icon: Globe },
   { id: 'e-way-bills', label: 'E-way Bills', icon: Truck },
   { id: 'vault', label: 'Cloud Vault', icon: Database },
-  { id: 'settings', label: 'Settings', icon: SettingsIcon },
 ];
 
 interface DashboardNavProps {
@@ -26,6 +26,7 @@ interface DashboardNavProps {
   onTabChange: (tab: TabType) => void;
   onNavigate?: () => void;
   layout?: 'vertical' | 'drawer';
+  showActivity?: boolean;
 }
 
 export default function DashboardNav({
@@ -33,15 +34,20 @@ export default function DashboardNav({
   onTabChange,
   onNavigate,
   layout = 'vertical',
+  showActivity = false,
 }: DashboardNavProps) {
   const handleClick = (tab: TabType) => {
     onTabChange(tab);
     onNavigate?.();
   };
 
+  const navItems = showActivity
+    ? NAV_ITEMS
+    : NAV_ITEMS.filter((item) => item.id !== 'activity');
+
   return (
     <nav className={layout === 'vertical' ? 'space-y-1.5' : 'space-y-1'}>
-      {NAV_ITEMS.map(({ id, label, icon: Icon }) => (
+      {navItems.map(({ id, label, icon: Icon }) => (
         <button
           key={id}
           onClick={() => handleClick(id)}

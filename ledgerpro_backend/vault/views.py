@@ -213,8 +213,10 @@ def upload_stub_file(request, firm_id):
             file_url=file_url,
             file_size=len(file_data),
             uploaded_by=request.user,
-            status='uploaded',
+            status='processing',
         )
+        from eway_bills.tasks import extract_eway_bill_data
+        extract_eway_bill_data.delay(eway_record.id)
         log_audit(
             user=request.user,
             firm=firm,

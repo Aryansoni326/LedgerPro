@@ -9,4 +9,5 @@ urlpatterns = [
     path('invoices/<int:pk>/verify', views.verify_invoice, name='verify_invoice'),
     path('invoices/<int:pk>/retry-extraction', views.retry_extraction, name='retry_extraction'),
     path('firms/<int:firm_id>/invoices/export-excel', views.export_excel, name='export_excel'),
+    path('firms/<int:firm_id>/invoices/import-existing-excel', views.import_existing_excel, name='import_existing_excel'),
 ]

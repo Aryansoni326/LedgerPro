@@ -26,7 +26,7 @@ def get_mime_type(filename):
     return 'application/octet-stream'
 
 
-@shared_task(bind=True, max_retries=2, default_retry_delay=10)
+@shared_task(bind=True, max_retries=6, default_retry_delay=10)
 def extract_trade_doc_data(self, record_id):
     """
     Celery task: Extracts structured metadata from Bill of Entry / Shipping Bill
@@ -74,23 +74,30 @@ def extract_trade_doc_data(self, record_id):
     base64_data = base64.b64encode(file_data).decode('utf-8')
     mime_type = get_mime_type(record.file_name)
 
+    warnings = []
+
     # 2. Call Gemini Vision API
     gemini_api_key = os.environ.get('GEMINI_API_KEY') or getattr(settings, 'GEMINI_API_KEY', None)
     is_dummy_key = (
         not gemini_api_key
+        or gemini_api_key.strip() == ""
         or gemini_api_key.startswith('mock-')
-        or 'YOUR_GEMINI_KEY' in gemini_api_key
+        or 'your_gemini_key' in gemini_api_key.lower()
+        or 'your-gemini-api-key' in gemini_api_key.lower()
+        or 'your-gemini-key' in gemini_api_key.lower()
     )
 
     if is_dummy_key:
         # Development mock fallback
         logger.warning("No valid Gemini key — using mock trade doc extraction for Record %s.", record_id)
+        warnings.append("API key is a dummy/placeholder key. Please set a valid GEMINI_API_KEY to extract real data.")
+        warnings.append("Using mock data fallback for development.")
         time.sleep(2)
         mock_response = {
             "be_number": "BE2026-00123",
             "be_date": "2026-06-30",
             "port_code": "INMAA1",
-            "container_id": "TCKU3953645",
+            "container_id": "HASU4160955, MRKU4458227, MRSU7338059, MSKU0709603, TCNU6783104, TLLU5797850, TLLU8128273",
             "gross_weight": 12500.0,
             "net_weight": 11800.0,
             "currency": "USD",
@@ -115,7 +122,7 @@ def extract_trade_doc_data(self, record_id):
             '  "be_number": "string (Bill of Entry number, or shipping bill number)",\n'
             '  "be_date": "string (ISO format YYYY-MM-DD — the date on the document)",\n'
             '  "port_code": "string (customs port code, e.g. INMAA1 for Chennai)",\n'
-            '  "container_id": "string (container or airway bill number, or null if absent)",\n'
+            '  "container_id": "string (comma-separated list of all container numbers/IDs found in the document, or null if absent)",\n'
             '  "gross_weight": number (gross weight in KG, default 0.0),\n'
             '  "net_weight": number (net weight in KG, default 0.0),\n'
             '  "currency": "string (3-letter ISO currency code, e.g. USD, EUR, INR)",\n'
@@ -132,7 +139,7 @@ def extract_trade_doc_data(self, record_id):
         )
 
         api_url = (
-            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash"
+            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash"
             f":generateContent?key={gemini_api_key}"
         )
         payload = {
@@ -164,7 +171,11 @@ def extract_trade_doc_data(self, record_id):
                     record.extraction_failed = True
                     record.save()
                     return
-                raise self.retry(exc=he)
+                import random
+                # Exponential backoff with jitter: 5s, 10s, 20s, 40s, 80s, 160s + random 1-5s
+                backoff = 5 * (2 ** self.request.retries) + random.randint(1, 5)
+                logger.info("Retrying task for Record %s in %s seconds due to HTTP %s.", record_id, backoff, he.code)
+                raise self.retry(exc=he, countdown=backoff)
             else:
                 record.status = 'needs_review'
                 record.extraction_failed = True
@@ -197,8 +208,7 @@ def extract_trade_doc_data(self, record_id):
             record.save()
             return
 
-    # 4. Validation rules for trade docs
-    warnings = []
+    # 4. Validation rules for trade docs (preserve existing extraction warnings)
 
     gross = float(parsed_json.get('gross_weight', 0.0) or 0.0)
     net = float(parsed_json.get('net_weight', 0.0) or 0.0)
@@ -242,7 +252,7 @@ def extract_trade_doc_data(self, record_id):
     record.be_number = str(parsed_json.get('be_number') or '')[:100] or None
     record.be_date = be_date_parsed
     record.port_code = str(parsed_json.get('port_code') or '')[:20] or None
-    record.container_id = str(parsed_json.get('container_id') or '')[:100] or None
+    record.container_id = str(parsed_json.get('container_id') or '')[:1000] or None
     record.gross_weight = gross or None
     record.net_weight = net or None
     record.currency = str(parsed_json.get('currency') or '')[:10] or None

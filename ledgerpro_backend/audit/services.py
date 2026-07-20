@@ -1,6 +1,6 @@
 import logging
 
-from .models import AuditLog
+from .models import AuditLog, FirmAccessLog
 
 logger = logging.getLogger(__name__)
 
@@ -44,3 +44,33 @@ def log_audit(
         entry.ip_address,
     )
     return entry
+
+
+def log_firm_access(*, user, firm, request=None) -> FirmAccessLog:
+    """Record a firm login / access event for owner activity feeds."""
+    user_agent = ''
+    if request is not None:
+        user_agent = (request.META.get('HTTP_USER_AGENT') or '')[:512]
+    entry = FirmAccessLog.objects.create(
+        user=user,
+        firm=firm,
+        event_type=FirmAccessLog.EVENT_LOGIN,
+        ip_address=_client_ip(request),
+        user_agent=user_agent,
+    )
+    logger.info(
+        "FIRM_ACCESS user=%s firm=%s event=login ip=%s",
+        getattr(user, 'email', None),
+        getattr(firm, 'id', None),
+        entry.ip_address,
+    )
+    return entry
+
+
+def log_firm_access_for_user_firms(*, user, firms, request=None) -> int:
+    """Log a login access event for each firm in the queryset/iterable."""
+    count = 0
+    for firm in firms:
+        log_firm_access(user=user, firm=firm, request=request)
+        count += 1
+    return count

@@ -2,6 +2,42 @@ from django.conf import settings
 from django.db import models
 
 
+class FirmAccessLog(models.Model):
+    """Tracks who accessed a firm (login sessions) for owner visibility."""
+
+    EVENT_LOGIN = 'login'
+
+    EVENT_CHOICES = [
+        (EVENT_LOGIN, 'Login'),
+    ]
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='firm_access_logs',
+    )
+    firm = models.ForeignKey(
+        'firms.Firm',
+        on_delete=models.CASCADE,
+        related_name='access_logs',
+    )
+    event_type = models.CharField(max_length=20, choices=EVENT_CHOICES, default=EVENT_LOGIN)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.CharField(max_length=512, blank=True, default='')
+    timestamp = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ['-timestamp']
+        indexes = [
+            models.Index(fields=['firm', 'timestamp']),
+        ]
+
+    def __str__(self):
+        actor = self.user.email if self.user else 'unknown'
+        return f"{self.timestamp:%Y-%m-%d %H:%M} {actor} {self.event_type} firm:{self.firm_id}"
+
+
 class AuditLog(models.Model):
     """Immutable audit trail for financial document operations."""
 

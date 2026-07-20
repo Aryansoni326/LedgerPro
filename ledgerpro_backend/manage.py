@@ -6,6 +6,15 @@ import sys
 
 def main():
     """Run administrative tasks."""
+    import sys
+    # Ensure ledgerpro_backend is prioritized and root directory is removed from path
+    backend_dir = os.path.dirname(os.path.abspath(__file__))
+    root_dir = os.path.dirname(backend_dir)
+    
+    # Remove conflicting paths
+    sys.path = [p for p in sys.path if os.path.abspath(p).lower() not in (os.path.abspath(root_dir).lower(), os.path.abspath('').lower(), '')]
+    sys.path.insert(0, backend_dir)
+
     os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'ledgerpro_backend.settings')
     try:
         from django.core.management import execute_from_command_line

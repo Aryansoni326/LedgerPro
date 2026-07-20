@@ -36,7 +36,7 @@ class ImportExportRecord(models.Model):
     be_number = models.CharField(max_length=100, blank=True, null=True)
     be_date = models.DateField(blank=True, null=True)
     port_code = models.CharField(max_length=20, blank=True, null=True)
-    container_id = models.CharField(max_length=100, blank=True, null=True)
+    container_id = models.CharField(max_length=1000, blank=True, null=True)
     gross_weight = models.DecimalField(max_digits=14, decimal_places=3, blank=True, null=True)
     net_weight = models.DecimalField(max_digits=14, decimal_places=3, blank=True, null=True)
     currency = models.CharField(max_length=10, blank=True, null=True)

@@ -177,3 +177,36 @@ REST_FRAMEWORK = {
         'rest_framework.permissions.IsAuthenticated',
     ],
 }
+
+# ── Email / SMTP Configuration ────────────────────────────────────────────────
+# Configure via .env: EMAIL_HOST, EMAIL_PORT, EMAIL_HOST_USER, EMAIL_HOST_PASSWORD
+# Example for Gmail:
+#   EMAIL_HOST=smtp.gmail.com
+#   EMAIL_PORT=587
+#   EMAIL_HOST_USER=yourname@gmail.com
+#   EMAIL_HOST_PASSWORD=your_app_password
+#   EMAIL_USE_TLS=True
+#   DEFAULT_FROM_EMAIL=LedgerPro <yourname@gmail.com>
+EMAIL_BACKEND = env('EMAIL_BACKEND', default='django.core.mail.backends.smtp.EmailBackend')
+EMAIL_HOST = env('EMAIL_HOST', default='')
+EMAIL_PORT = env.int('EMAIL_PORT', default=587)
+EMAIL_HOST_USER = env('EMAIL_HOST_USER', default='')
+EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD', default='')
+EMAIL_USE_TLS = env.bool('EMAIL_USE_TLS', default=True)
+EMAIL_USE_SSL = env.bool('EMAIL_USE_SSL', default=False)
+DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default='LedgerPro <noreply@ledgerpro.in>')
+
+# ── Google OAuth 2.0 ──────────────────────────────────────────────────────────
+# Create credentials at: https://console.cloud.google.com/apis/credentials
+# Set the Authorized Redirect URI to:  http://localhost:8000/api/auth/google/callback
+# (or your production domain equivalent)
+GOOGLE_OAUTH_CLIENT_ID = env('GOOGLE_OAUTH_CLIENT_ID', default='')
+GOOGLE_OAUTH_CLIENT_SECRET = env('GOOGLE_OAUTH_CLIENT_SECRET', default='')
+GOOGLE_OAUTH_REDIRECT_URI = env(
+    'GOOGLE_OAUTH_REDIRECT_URI',
+    default='http://localhost:3000/auth/google/callback'
+)
+
+# Resend API key (optional — only needed if not using SMTP)
+RESEND_API_KEY = env('RESEND_API_KEY', default='')
+

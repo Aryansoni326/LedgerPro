@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
 import { ThemeProvider } from "./providers";
+import RouteLoader from "./components/route-loader";
+import { Suspense } from "react";
 
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
@@ -15,8 +17,8 @@ const geistMono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "LedgerPro v2 - AI Invoice Automation",
-  description: "Next-gen AI invoice automation SaaS for modern business finance operations.",
+  title: 'LedgerPro | AI Invoice Automation',
+  description: "AI-powered invoice and GST automation for accountants and CA firms in India.",
 };
 
 export default function RootLayout({
@@ -30,9 +32,13 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <ThemeProvider>
+          <Suspense fallback={null}>
+            <RouteLoader />
+          </Suspense>
           {children}
         </ThemeProvider>
       </body>
     </html>
   );
 }
+

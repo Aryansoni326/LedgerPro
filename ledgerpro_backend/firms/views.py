@@ -12,34 +12,52 @@ from accounts.models import OTPResendTracker, OTPVerification
 from accounts.otp_helpers import _client_ip, verify_otp_session
 from accounts.rate_limit import RateLimitExceeded, check_resend_ip_limit, record_resend_otp
 from accounts.services import OTPService
+from audit.models import AuditLog, FirmAccessLog
+from firms.access import firms_queryset_for_user
+from firms.permissions import HasFirmAccess, is_firm_creator, is_firm_owner_email
 
 from .models import Firm
-from .permissions import HasFirmAccess
 
 logger = logging.getLogger(__name__)
+
+
+def _serialize_firm(firm, user):
+    access = 'full' if is_firm_creator(user, firm) else 'read_only'
+    return {
+        'id': firm.id,
+        'name': firm.name,
+        'gstin': firm.gstin,
+        'state': firm.state,
+        'city': firm.city,
+        'owner_email': firm.owner_email,
+        'status': firm.status,
+        'created_at': firm.created_at,
+        'access_mode': access,
+        'accountant_email': firm.created_by.email if firm.created_by_id else None,
+    }
+
 
 @api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated])
 def list_create_firms(request):
     """
-    GET: List all active and pending firms created by the accountant.
-    POST: Create a pending firm and initiate owner email OTP 2FA verification.
+    GET: List firms the user created or owns (via owner_email).
+    POST: Create a pending firm (accountants only) and initiate owner email OTP.
     """
     if request.method == 'GET':
-        firms = Firm.objects.filter(created_by=request.user).order_by('-created_at')
-        firm_list = [{
-            'id': firm.id,
-            'name': firm.name,
-            'gstin': firm.gstin,
-            'state': firm.state,
-            'city': firm.city,
-            'owner_email': firm.owner_email,
-            'status': firm.status,
-            'created_at': firm.created_at
-        } for firm in firms]
-        return Response(firm_list, status=status.HTTP_200_OK)
+        firms = firms_queryset_for_user(request.user).select_related('created_by').order_by('-created_at')
+        return Response(
+            [_serialize_firm(firm, request.user) for firm in firms],
+            status=status.HTTP_200_OK,
+        )
 
     elif request.method == 'POST':
+        if request.user.role == 'owner':
+            return Response(
+                {'error': 'Owner accounts are read-only and cannot register new firms.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         name = request.data.get('name')
         gstin = request.data.get('gstin', '')
         state = request.data.get('state')
@@ -52,7 +70,6 @@ def list_create_firms(request):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Build Firm instance and validate format (GSTIN regex checks via full_clean)
         firm = Firm(
             name=name,
             gstin=gstin.upper() if gstin else None,
@@ -66,19 +83,15 @@ def list_create_firms(request):
         try:
             firm.full_clean()
         except ValidationError as ve:
-            # Flatten validation errors
             errors = {field: messages[0] for field, messages in ve.message_dict.items()}
             return Response({'errors': errors}, status=status.HTTP_400_BAD_REQUEST)
 
         firm.save()
 
-        # Create OTP Verification session for firm owner
         verification, code = OTPService.create_verification(
             email=owner_email,
             purpose='firm_owner_verify'
         )
-
-        # Send OTP code
         OTPService.send_otp_email(owner_email, code)
 
         return Response({
@@ -92,38 +105,108 @@ def list_create_firms(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated, HasFirmAccess])
 def firm_detail(request, pk):
+    """GET: Retrieve details of a specific firm. Restricted by HasFirmAccess."""
+    try:
+        firm = Firm.objects.select_related('created_by').get(pk=pk)
+    except Firm.DoesNotExist:
+        return Response({'error': 'Firm not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+    permission = HasFirmAccess()
+    if not permission.has_object_permission(request, None, firm):
+        return Response({'error': 'You do not have permission to access this firm.'}, status=status.HTTP_403_FORBIDDEN)
+
+    return Response(_serialize_firm(firm, request.user), status=status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def firm_activity(request, pk):
     """
-    GET: Retrieve details of a specific firm. Restricted by HasFirmAccess.
+    GET: Activity feed for a firm — logins, uploads, edits, and other work.
+    Available to accountants (creators) and owners (owner_email match).
     """
     try:
         firm = Firm.objects.get(pk=pk)
     except Firm.DoesNotExist:
         return Response({'error': 'Firm not found.'}, status=status.HTTP_404_NOT_FOUND)
 
-    # Check HasFirmAccess permission manually in FBV
-    permission = HasFirmAccess()
-    if not permission.has_object_permission(request, None, firm):
+    if not (is_firm_creator(request.user, firm) or is_firm_owner_email(request.user, firm)):
         return Response({'error': 'You do not have permission to access this firm.'}, status=status.HTTP_403_FORBIDDEN)
 
+    limit = min(int(request.query_params.get('limit', 100)), 300)
+
+    access_logs = (
+        FirmAccessLog.objects.filter(firm=firm)
+        .select_related('user')
+        .order_by('-timestamp')[:limit]
+    )
+    audit_logs = (
+        AuditLog.objects.filter(firm=firm)
+        .select_related('user')
+        .order_by('-timestamp')[:limit]
+    )
+
+    events = []
+    for entry in access_logs:
+        events.append({
+            'id': f'access-{entry.id}',
+            'kind': 'login',
+            'action': 'login',
+            'actor_email': entry.user.email if entry.user else None,
+            'actor_name': (
+                entry.user.get_full_name() or entry.user.email.split('@')[0]
+            ) if entry.user else 'Unknown',
+            'actor_role': entry.user.role if entry.user else None,
+            'resource_type': None,
+            'resource_id': None,
+            'details': {
+                'ip_address': entry.ip_address,
+                'user_agent': entry.user_agent,
+            },
+            'timestamp': entry.timestamp,
+        })
+
+    resource_labels = {
+        'bill': 'Invoice / Bill',
+        'import_export_record': 'Import-Export document',
+        'eway_bill_record': 'E-Way Bill',
+    }
+    for entry in audit_logs:
+        events.append({
+            'id': f'audit-{entry.id}',
+            'kind': 'work',
+            'action': entry.action,
+            'actor_email': entry.user.email if entry.user else None,
+            'actor_name': (
+                entry.user.get_full_name() or entry.user.email.split('@')[0]
+            ) if entry.user else 'System',
+            'actor_role': entry.user.role if entry.user else None,
+            'resource_type': entry.resource_type,
+            'resource_label': resource_labels.get(entry.resource_type, entry.resource_type),
+            'resource_id': entry.resource_id,
+            'details': entry.details or {},
+            'timestamp': entry.timestamp,
+        })
+
+    events.sort(key=lambda e: e['timestamp'], reverse=True)
+    events = events[:limit]
+
+    uploads = [e for e in events if e['kind'] == 'work' and e['action'] == 'upload']
+
     return Response({
-        'id': firm.id,
-        'name': firm.name,
-        'gstin': firm.gstin,
-        'state': firm.state,
-        'city': firm.city,
-        'owner_email': firm.owner_email,
-        'status': firm.status,
-        'created_at': firm.created_at
+        'firm_id': firm.id,
+        'firm_name': firm.name,
+        'events': events,
+        'uploads': uploads,
+        'login_count': FirmAccessLog.objects.filter(firm=firm).count(),
+        'work_count': AuditLog.objects.filter(firm=firm).count(),
     }, status=status.HTTP_200_OK)
 
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def verify_firm_otp(request, pk):
-    """
-    POST: Verify the 4-digit OTP code to activate the pending firm.
-    Accepts pending_token and code.
-    """
+    """POST: Verify the OTP code to activate the pending firm."""
     try:
         firm = Firm.objects.get(pk=pk, created_by=request.user)
     except Firm.DoesNotExist:
@@ -176,10 +259,7 @@ def verify_firm_otp(request, pk):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def resend_firm_otp(request, pk):
-    """
-    POST: Resend verification OTP code to the firm owner's email address.
-    Rate-limited (max 3 resends per 10 minutes).
-    """
+    """POST: Resend verification OTP to the firm owner's email."""
     try:
         firm = Firm.objects.get(pk=pk, created_by=request.user)
     except Firm.DoesNotExist:
@@ -207,7 +287,6 @@ def resend_firm_otp(request, pk):
         except RateLimitExceeded as exc:
             return Response({'error': str(exc)}, status=status.HTTP_429_TOO_MANY_REQUESTS)
 
-        # Rate limit checks (max 3 in last 10m)
         ten_minutes_ago = timezone.now() - timedelta(minutes=10)
         recent_resends = OTPResendTracker.objects.filter(email=firm.owner_email, timestamp__gte=ten_minutes_ago).count()
 
@@ -217,20 +296,16 @@ def resend_firm_otp(request, pk):
                 status=status.HTTP_429_TOO_MANY_REQUESTS
             )
 
-        # Log resend
         OTPResendTracker.objects.create(email=firm.owner_email)
 
-        # Generate new verification code and session
         new_verification, code = OTPService.create_verification(
             email=firm.owner_email,
             purpose='firm_owner_verify'
         )
 
-        # Lock old verification session
         old_verification.is_locked = True
         old_verification.save()
 
-        # Send new OTP
         OTPService.send_otp_email(firm.owner_email, code)
         record_resend_otp(_client_ip(request), firm.owner_email)
 

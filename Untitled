@@ -1,0 +1,6 @@
+ |  ✓ Compiled in 1787ms (724 modules)
+ledgerpro_frontend  |  ○ Compiling /register ...
+ledgerpro_db        | 2026-07-20 01:20:46.700 UTC [33] LOG:  checkpoint starting: time
+ledgerpro_db        | 2026-07-20 01:20:47.816 UTC [33] LOG:  checkpoint complete: wrote 9 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.928 s, sync=0.034 s, total=1.117 s; sync files=3, longest=0.030 s, average=0.012 s; distance=11 kB, estimate=293 kB; lsn=0/1C84C10, redo lsn=0/1C84BD8
+ledgerpro_frontend  |  ✓ Compiled /register in 6.8s (1468 modules)
+ledgerpro_backend   | [20/Jul/2026 01:20:57] "GET /api/auth/google/initiate HTTP/1.1" 302 0

@@ -5,8 +5,11 @@ import { useAuth, Firm } from '../auth-context';
 import { useTheme } from '../providers';
 import AddFirmModal from '../components/add-firm-modal';
 import SaasFooter from '../components/saas-footer';
+import LedgerProLogo from '../components/ledgerpro-logo';
 import DashboardNav, { TabType } from '../components/dashboard-nav';
 import {
+  BarChart,
+  Bar,
   LineChart,
   Line,
   XAxis,
@@ -24,7 +27,8 @@ import {
   Plus, 
   Moon, 
   Sun, 
-  LogOut, 
+  LogOut,
+  Eye, 
   FileText, 
   Globe, 
   Truck, 
@@ -36,7 +40,6 @@ import {
   FolderOpen,
   X,
   File,
-  Loader2,
   CheckCircle2,
   Clock,
   Edit2,
@@ -46,22 +49,216 @@ import {
   TrendingDown,
   BarChart2,
   Calendar,
-  Menu
+  Menu,
+  User,
+  Settings,
+  Building2,
+  Download,
+  Activity,
+  Shield
 } from 'lucide-react';
 
+const ThreeDotLoader = ({ size = "md", color = "text-text-primary", className = "" }: { size?: 'sm' | 'md' | 'lg', color?: string, className?: string }) => {
+  const dotSizes = {
+    sm: "w-1 h-1 gap-1",
+    md: "w-1.5 h-1.5 gap-1.5",
+    lg: "w-2.5 h-2.5 gap-2"
+  };
+  const sizeClass = dotSizes[size];
+  const pxVal = size === 'sm' ? '4px' : size === 'md' ? '6px' : '10px';
+  return (
+    <div className={`inline-flex items-center justify-center ${sizeClass} ${color} ${className}`}>
+      {[0, 1, 2].map((i) => (
+        <span
+          key={i}
+          className="rounded-full bg-current"
+          style={{
+            animation: `dotBounce 1.2s ease-in-out infinite`,
+            animationDelay: `${i * 0.2}s`,
+            width: pxVal,
+            height: pxVal
+          }}
+        />
+      ))}
+      <style>{`
+        @keyframes dotBounce {
+          0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+          40% { transform: scale(1); opacity: 1; }
+        }
+      `}</style>
+    </div>
+  );
+};
+
+const formatEwayBillNumber = (num: string) => {
+  if (!num) return '';
+  const clean = num.replace(/\D/g, '');
+  const matches = clean.match(/.{1,4}/g);
+  return matches ? matches.join(' ') : clean;
+};
+
+const EwayBillLinkSelector = ({
+  doc,
+  ewayBills,
+  onLinkEway,
+  onViewEway
+}: {
+  doc: any;
+  ewayBills: any[];
+  onLinkEway: (billId: number, beNumber: string) => void;
+  onViewEway: (bill: any) => void;
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // Find E-way bills already sharing this doc's BE no
+  const linkedEways = doc.be_number
+    ? ewayBills.filter((b) => b.be_number?.toLowerCase() === doc.be_number?.toLowerCase() && !b.is_deleted)
+    : [];
+
+  // Find other E-way bills matching search query
+  const searchMatchedEways = searchQuery.trim()
+    ? ewayBills.filter(
+        (b) =>
+          !b.is_deleted &&
+          b.be_number?.toLowerCase().includes(searchQuery.toLowerCase()) &&
+          b.be_number?.toLowerCase() !== doc.be_number?.toLowerCase()
+      )
+    : [];
+
+  return (
+    <div className="relative">
+      <div className="flex flex-wrap gap-1 items-center max-w-[220px]">
+        {linkedEways.map((b) => (
+          <span
+            key={b.id}
+            onClick={(e) => {
+              e.stopPropagation();
+              onViewEway(b);
+            }}
+            className="px-1.5 py-0.5 bg-accent/20 border border-accent/40 rounded text-[10px] text-accent font-bold cursor-pointer hover:bg-accent/30 flex items-center gap-0.5"
+            title={`Vehicle: ${b.vehicle_number || 'N/A'}. Click to view.`}
+          >
+            <Truck className="w-2.5 h-2.5" />
+            {formatEwayBillNumber(b.eway_bill_number) || 'E-Way Bill'}
+          </span>
+        ))}
+        {doc.status !== 'verified' && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsOpen(!isOpen);
+              setSearchQuery(doc.be_number || ''); // default search to current doc's BE number
+            }}
+            className="p-1 hover:bg-bg-primary rounded text-text-secondary hover:text-text-primary transition-all flex items-center justify-center"
+            title="Link E-Way Bill"
+          >
+            <Plus className="w-3.5 h-3.5" />
+          </button>
+        )}
+      </div>
+
+      {isOpen && (
+        <div
+          className="absolute right-0 mt-1 w-64 bg-bg-secondary border border-border-subtle rounded-md shadow-lg p-2.5 z-40 space-y-2 text-left"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex justify-between items-center border-b border-border-subtle pb-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-text-secondary">Link E-Way Bill</span>
+            <button onClick={() => setIsOpen(false)} className="text-text-secondary hover:text-text-primary">
+              <X className="w-3 h-3" />
+            </button>
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-[9px] font-bold text-text-secondary uppercase">Search BE No</label>
+            <input
+              type="text"
+              placeholder="Search BE No..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full bg-bg-primary border border-border-subtle rounded px-2 py-1 focus:outline-none focus:border-accent text-text-primary text-xs"
+              autoFocus
+            />
+          </div>
+
+          <div className="max-h-36 overflow-y-auto space-y-1 pt-1">
+            {/* Show matching e-way bills with same BE number */}
+            {linkedEways.length > 0 && (
+              <div>
+                <p className="text-[9px] text-accent font-bold uppercase mb-1">Linked to this BE</p>
+                {linkedEways.map((b) => (
+                  <div
+                    key={b.id}
+                    className="p-1 rounded bg-accent/5 border border-accent/20 text-[10px] flex justify-between items-center"
+                  >
+                    <span className="truncate">{b.eway_bill_number || b.file_name}</span>
+                    <button
+                      onClick={() => onLinkEway(b.id, '')} // Unlink by clearing be_number
+                      className="text-[9px] text-red-500 hover:underline"
+                    >
+                      Unlink
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Show search results for other e-way bills */}
+            {searchQuery.trim() && (
+              <div className="pt-1">
+                <p className="text-[9px] text-text-secondary font-bold uppercase mb-1">Search Results ({searchQuery})</p>
+                {searchMatchedEways.length === 0 ? (
+                  <p className="text-[10px] text-text-secondary italic">No other E-Way bills match.</p>
+                ) : (
+                  searchMatchedEways.map((b) => (
+                    <button
+                      key={b.id}
+                      onClick={() => {
+                        onLinkEway(b.id, doc.be_number || '');
+                        setIsOpen(false);
+                      }}
+                      className="w-full text-left p-1 rounded hover:bg-bg-primary text-[10px] flex justify-between items-center border border-transparent hover:border-border-subtle"
+                    >
+                      <span className="truncate font-semibold">{b.eway_bill_number || b.file_name}</span>
+                      <span className="text-[9px] text-text-secondary">BE: {b.be_number}</span>
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
+
+            {!searchQuery.trim() && linkedEways.length === 0 && (
+              <p className="text-[10px] text-text-secondary italic text-center py-2">Type a BE number to search and link.</p>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 export default function DashboardPage() {
-  const { token, user, logout, loading: authLoading, firms, selectedFirm, setSelectedFirm } = useAuth();
+  const { token, user, logout, loading: authLoading, firms, selectedFirm, setSelectedFirm, updateUser, isReadOnly } = useAuth();
   const { theme, toggleTheme, mounted } = useTheme();
   
   // Tab and dropdown states
   const [activeTab, setActiveTab] = useState<TabType>('overview');
-  const [invoiceType, setInvoiceType] = useState<'purchase' | 'sales'>('purchase');
+  const [invoiceType, setInvoiceType] = useState<'purchase' | 'sales' | 'all'>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [activityData, setActivityData] = useState<{
+    events: any[];
+    uploads: any[];
+    login_count: number;
+    work_count: number;
+  } | null>(null);
+  const [activityLoading, setActivityLoading] = useState(false);
 
   // Invoices & Upload states
   const [bills, setBills] = useState<any[]>([]);
+  const [overviewBills, setOverviewBills] = useState<any[]>([]);
   const [isLoadingBills, setIsLoadingBills] = useState(false);
   const [isInitialBillsLoad, setIsInitialBillsLoad] = useState(true);
   const [toasts, setToasts] = useState<{ id: string; message: string }[]>([]);
@@ -73,7 +270,50 @@ export default function DashboardPage() {
   // Spreadsheets inline editing states
   const [editingCell, setEditingCell] = useState<{ billId: number; field: string } | null>(null);
   const [editValue, setEditValue] = useState('');
-  const [includeUnverified, setIncludeUnverified] = useState(false);
+  const [includeUnverified, setIncludeUnverified] = useState(true);
+
+  const formatCurrency = (value: any) => {
+    if (value === undefined || value === null || value === '') return '';
+    const num = parseFloat(value);
+    if (isNaN(num)) return value;
+    return new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(num);
+  };
+
+  const downloadBlob = async (url: string, filename: string) => {
+    try {
+      const targetUrl = getFileUrl(url);
+      const res = await fetch(targetUrl);
+      if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+      const blob = await res.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (err) {
+      console.error("Failed to download via blob, falling back", err);
+      const link = document.createElement('a');
+      link.href = getFileUrl(url);
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    }
+  };
+
+  const [excelPopupOpen, setExcelPopupOpen] = useState(false);
+  const [lastExportBatch, setLastExportBatch] = useState<any>(null);
+  const [isClearingData, setIsClearingData] = useState(false);
+  const [isImportingExcel, setIsImportingExcel] = useState(false);
+  const excelInputRef = useRef<HTMLInputElement>(null);
 
   // Search, Filters & Action Modals
   const [searchQuery, setSearchQuery] = useState('');
@@ -139,16 +379,62 @@ export default function DashboardPage() {
   const importExportInputRef = useRef<HTMLInputElement>(null);
   const ewayBillsInputRef = useRef<HTMLInputElement>(null);
 
+  // E-Way Bills States
+  const [ewayBills, setEwayBills] = useState<any[]>([]);
+  const [isLoadingEwayBills, setIsLoadingEwayBills] = useState(false);
+  const [isRefreshingEwayBills, setIsRefreshingEwayBills] = useState(false);
+  const [ewayBillUploadingFiles, setEwayBillUploadingFiles] = useState<any[]>([]);
+  const [ewayBillSummaryMsg, setEwayBillSummaryMsg] = useState('');
+  const [ewayBillSearch, setEwayBillSearch] = useState('');
+  const [ewayBillStatusFilter, setEwayBillStatusFilter] = useState('');
+  const [viewingEwayBill, setViewingEwayBill] = useState<any | null>(null);
+  const [deletingEwayBillId, setDeletingEwayBillId] = useState<number | null>(null);
+  const [editingEwayCell, setEditingEwayCell] = useState<{ billId: number; field: string } | null>(null);
+  const [editEwayValue, setEditEwayValue] = useState('');
+  const [savingEwayBillId, setSavingEwayBillId] = useState<number | null>(null);
+  const [isDraggingEway, setIsDraggingEway] = useState(false);
+
 
   // Form states for settings panel
   const [accountantName, setAccountantName] = useState(user?.name || '');
-  const [geminiKey, setGeminiKey] = useState('');
+  const [profilePhone, setProfilePhone] = useState('');
+  const [profilePan, setProfilePan] = useState('');
+  const [profileRole, setProfileRole] = useState('accountant');
+  const [profileLocation, setProfileLocation] = useState('');
+  const [firmLogo, setFirmLogo] = useState('');
   const [saveSuccess, setSaveSuccess] = useState(false);
+
+  useEffect(() => {
+    if (user) {
+      setAccountantName(user.name || '');
+      setProfilePhone((user as any).phone_number || '');
+      setProfilePan((user as any).pan_number || '');
+      setProfileRole((user as any).role || 'accountant');
+      setProfileLocation((user as any).location || '');
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (selectedFirm) {
+      const savedLogo = localStorage.getItem(`firm_logo_${selectedFirm.id}`);
+      setFirmLogo(savedLogo || '');
+    } else {
+      setFirmLogo('');
+    }
+  }, [selectedFirm]);
 
   const handleSaveSettings = (e: React.FormEvent) => {
     e.preventDefault();
+    updateUser({
+      name: accountantName,
+      phone_number: profilePhone,
+      pan_number: profilePan,
+      role: profileRole,
+      location: profileLocation
+    } as any);
     setSaveSuccess(true);
     setTimeout(() => setSaveSuccess(false), 3000);
+    triggerToast("Profile settings saved successfully!");
   };
 
   // 1. Toast Notification Trigger
@@ -158,6 +444,49 @@ export default function DashboardPage() {
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
     }, 5000);
+  };
+
+  const guardReadOnly = () => {
+    if (!isReadOnly) return false;
+    triggerToast('Owner access is read-only. Your accountant can make changes.');
+    return true;
+  };
+
+  const fetchActivity = async () => {
+    const activeToken = token || localStorage.getItem('auth_token');
+    if (!activeToken || !selectedFirm) return;
+    setActivityLoading(true);
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    try {
+      const res = await fetch(`${apiUrl}/api/firms/${selectedFirm.id}/activity?limit=150`, {
+        headers: {
+          Authorization: `Bearer ${activeToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      if (res.ok) {
+        setActivityData(await res.json());
+      }
+    } catch (err) {
+      console.error('Failed to fetch activity:', err);
+    } finally {
+      setActivityLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'activity' && selectedFirm) {
+      fetchActivity();
+    }
+  }, [activeTab, selectedFirm]);
+
+  const getInitials = (name: string) => {
+    if (!name) return 'A';
+    const parts = name.trim().split(/\s+/);
+    if (parts.length >= 2) {
+      return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+    }
+    return parts[0].substring(0, 2).toUpperCase();
   };
 
   // 2. Fetch Invoices List
@@ -184,18 +513,7 @@ export default function DashboardPage() {
       if (res.ok) {
         const data = await res.json();
         
-        // Check for state transitions from 'processing' to 'needs_review' to alert user
-        setBills((prevBills) => {
-          if (prevBills.length > 0) {
-            data.forEach((newBill: any) => {
-              const oldBill = prevBills.find((b: any) => b.id === newBill.id);
-              if (oldBill && oldBill.status === 'processing' && newBill.status === 'needs_review') {
-                triggerToast(`Invoice "${newBill.file_name}" completed processing and is ready for review.`);
-              }
-            });
-          }
-          return data;
-        });
+        setBills(data);
       }
     } catch (err) {
       console.error("Failed to fetch bills:", err);
@@ -205,18 +523,66 @@ export default function DashboardPage() {
     }
   };
 
+  const fetchOverviewBills = async () => {
+    const activeToken = token || localStorage.getItem('auth_token');
+    if (!activeToken || !selectedFirm) return;
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
+    try {
+      const res = await fetch(`${apiUrl}/api/firms/${selectedFirm.id}/invoices`, {
+        headers: {
+          Authorization: `Bearer ${activeToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      if (res.ok) {
+        setOverviewBills(await res.json());
+      }
+    } catch (err) {
+      console.error('Failed to fetch overview bills:', err);
+    }
+  };
+
+  const refreshDashboardData = async () => {
+    await Promise.all([
+      fetchOverviewBills(),
+      fetchAnalytics(analyticsRange),
+    ]);
+    if (activeTab === 'invoices') {
+      await fetchBills({ silent: true });
+    }
+  };
+
   // 3. Polling & Filtering Effect
   useEffect(() => {
     if (!selectedFirm) return;
-    fetchBills();
-
-    // Poll every 3.5 seconds
-    const interval = setInterval(() => {
-      fetchBills({ silent: true });
-    }, 3500);
-
-    return () => clearInterval(interval);
+    if (activeTab === 'invoices') {
+      fetchBills();
+      const interval = setInterval(() => {
+        fetchBills({ silent: true });
+      }, 3500);
+      return () => clearInterval(interval);
+    }
   }, [selectedFirm, searchQuery, statusFilter, billTypeFilter, startDate, endDate, activeTab]);
+
+  // Overview dashboard polling — always show latest uploads/verified counts
+  useEffect(() => {
+    if (!selectedFirm || activeTab !== 'overview') return;
+    fetchOverviewBills();
+    fetchAnalytics(analyticsRange);
+    const interval = setInterval(() => {
+      fetchOverviewBills();
+      fetchAnalytics(analyticsRange);
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [selectedFirm, activeTab, analyticsRange]);
+
+  // Owners-only Activity tab guard
+  useEffect(() => {
+    if (!isReadOnly && activeTab === 'activity') {
+      setActiveTab('overview');
+    }
+  }, [isReadOnly, activeTab]);
 
   // Reset initial load flags when firm changes
   useEffect(() => {
@@ -272,11 +638,12 @@ export default function DashboardPage() {
     if (activeTab === 'overview' && selectedFirm) {
       fetchAnalytics(analyticsRange);
     }
-  }, [activeTab, selectedFirm, analyticsRange]);
+  }, [analyticsRange]);
 
   // 3.5. Delete Invoice Handler
 
   const handleDeleteBill = async (billId: number) => {
+    if (guardReadOnly()) return;
     setIsDeletingBill(true);
     const activeToken = token || localStorage.getItem('auth_token');
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -290,7 +657,9 @@ export default function DashboardPage() {
       });
       if (res.ok) {
         setBills((prev) => prev.filter((b) => b.id !== billId));
+        setOverviewBills((prev) => prev.filter((b) => b.id !== billId));
         triggerToast("Invoice soft-deleted successfully.");
+        refreshDashboardData();
       } else {
         triggerToast("Failed to delete invoice.");
       }
@@ -301,6 +670,7 @@ export default function DashboardPage() {
     }
   };
   const handleGenerateExcel = async () => {
+    if (guardReadOnly()) return;
     if (!selectedFirm) return;
     setIsExporting(true);
     const activeToken = token || localStorage.getItem('auth_token');
@@ -314,16 +684,18 @@ export default function DashboardPage() {
         },
         body: JSON.stringify({
           status: statusFilter || undefined,
-          bill_type: billTypeFilter || undefined,
+          bill_type: billTypeFilter || (invoiceType === 'all' ? undefined : (invoiceType === 'sales' ? 'sale' : 'purchase')),
           start_date: startDate || undefined,
           end_date: endDate || undefined,
-          include_unverified: includeUnverified
+          include_unverified: true
         })
       });
 
       if (res.ok) {
         const batch = await res.json();
+        setIsExporting(false);
         setExportBatch(batch);
+        setLastExportBatch(batch);
         triggerToast("Excel sheet generated successfully!");
       } else {
         const data = await res.json();
@@ -333,6 +705,93 @@ export default function DashboardPage() {
       triggerToast("Connection failed during export.");
     } finally {
       setIsExporting(false);
+    }
+  };
+
+  const clearDataAndGoToOverview = async (billIds: number[]) => {
+    setIsClearingData(true);
+    const activeToken = token || localStorage.getItem('auth_token');
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    
+    try {
+      if (billIds && billIds.length > 0) {
+        // Soft-delete each exported bill ID concurrently
+        await Promise.all(
+          billIds.map((billId: number) =>
+            fetch(`${apiUrl}/api/invoices/${billId}`, {
+              method: 'DELETE',
+              headers: { 
+                'Authorization': `Bearer ${activeToken}`,
+                'Content-Type': 'application/json'
+              }
+            })
+          )
+        );
+      }
+      
+      triggerToast("All exported data cleared successfully!");
+      await fetchBills();
+      setActiveTab('overview');
+    } catch (err) {
+      triggerToast("Failed to clear data cleanly.");
+    } finally {
+      setIsClearingData(false);
+      setExcelPopupOpen(false);
+      setLastExportBatch(null);
+    }
+  };
+
+  const handleDoneExcel = async () => {
+    await clearDataAndGoToOverview(lastExportBatch?.bill_ids || []);
+  };
+
+  const handleDownloadExcelPopup = async () => {
+    if (!lastExportBatch || !lastExportBatch.file_url) return;
+    
+    // Format filename as "LedgerPro Excel YYYY-MM-DD.xlsx"
+    const dateStr = new Date().toISOString().slice(0, 10);
+    const filename = `LedgerPro Excel ${dateStr}.xlsx`;
+    
+    await downloadBlob(lastExportBatch.file_url, filename);
+    triggerToast("Excel downloaded successfully.");
+    
+    await clearDataAndGoToOverview(lastExportBatch.bill_ids || []);
+  };
+
+  const handleImportExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (guardReadOnly()) return;
+    if (!selectedFirm || !e.target.files || e.target.files.length === 0) return;
+    const file = e.target.files[0];
+    
+    setIsImportingExcel(true);
+    const formData = new FormData();
+    formData.append('excel_file', file);
+    
+    const activeToken = token || localStorage.getItem('auth_token');
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    
+    try {
+      const res = await fetch(`${apiUrl}/api/firms/${selectedFirm.id}/invoices/import-existing-excel`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${activeToken}`
+        },
+        body: formData
+      });
+      
+      const data = await res.json();
+      if (res.ok) {
+        triggerToast(data.message || "Excel file imported successfully.");
+        fetchBills();
+        refreshDashboardData();
+      } else {
+        triggerToast(data.error || "Failed to import Excel file.");
+      }
+    } catch (err) {
+      triggerToast("Connection failed during Excel import.");
+    } finally {
+      setIsImportingExcel(false);
+      if (excelInputRef.current) excelInputRef.current.value = '';
     }
   };
 
@@ -439,6 +898,7 @@ export default function DashboardPage() {
   };
 
   const handleDeleteVaultEntry = async (entryId: number) => {
+    if (guardReadOnly()) return;
     const activeToken = token || localStorage.getItem('auth_token');
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
     try {
@@ -460,6 +920,7 @@ export default function DashboardPage() {
   };
 
   const handleStubFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, targetModule: 'import_export' | 'eway_bills') => {
+    if (guardReadOnly()) return;
     if (!selectedFirm || !e.target.files || e.target.files.length === 0) return;
     const file = e.target.files[0];
     
@@ -523,11 +984,30 @@ export default function DashboardPage() {
 
   // Fetch on tab activation + poll while any record is still 'processing'
   useEffect(() => {
-    if (activeTab !== 'import-export' || !selectedFirm) return;
-    fetchTradeDocs();
+    if (!selectedFirm) return;
+    if (activeTab === 'import-export') {
+      fetchTradeDocs();
+      fetchEwayBills({ silent: true }); // Need e-way bills to link/match in dropdown
+      const interval = setInterval(() => {
+        setTradeDocs((prev: any[]) => {
+          if (prev.some((d: any) => d.status === 'processing')) {
+            fetchTradeDocs({ silent: true });
+            fetchEwayBills({ silent: true });
+          }
+          return prev;
+        });
+      }, 3500);
+      return () => clearInterval(interval);
+    }
+  }, [activeTab, selectedFirm]);
+
+  // E-way bills polling on tab activation
+  useEffect(() => {
+    if (activeTab !== 'e-way-bills' || !selectedFirm) return;
+    fetchEwayBills();
     const interval = setInterval(() => {
-      setTradeDocs((prev: any[]) => {
-        if (prev.some((d: any) => d.status === 'processing')) fetchTradeDocs({ silent: true });
+      setEwayBills((prev: any[]) => {
+        if (prev.some((d: any) => d.status === 'processing')) fetchEwayBills({ silent: true });
         return prev;
       });
     }, 3500);
@@ -535,6 +1015,7 @@ export default function DashboardPage() {
   }, [activeTab, selectedFirm]);
 
   const handleTradeDocFilesSelected = async (fileList: FileList) => {
+    if (guardReadOnly()) return;
     if (!selectedFirm) return;
     const files = Array.from(fileList);
     if (!files.length) return;
@@ -578,7 +1059,7 @@ export default function DashboardPage() {
 
       const count = (data.uploaded || []).length;
       const errCount = (data.errors || []).length;
-      let msg = `${count} file${count !== 1 ? 's' : ''} queued for extraction — AI processing…`;
+      let msg = `${count} file${count !== 1 ? 's' : ''} queued for extraction | AI processing…`;
       if (errCount > 0) msg += ` (${errCount} skipped)`;
       setTradeDocSummaryMsg(msg);
       setTimeout(() => setTradeDocUploadingFiles([]), 2500);
@@ -587,12 +1068,13 @@ export default function DashboardPage() {
         setTradeDocs((prev: any[]) => [...data.uploaded, ...prev]);
       }
     } catch (err) {
-      setTradeDocSummaryMsg('Upload failed — connection error.');
+      setTradeDocSummaryMsg('Upload failed | connection error.');
       setTradeDocUploadingFiles([]);
     }
   };
 
   const handleTradeCellSave = async (docId: number, field: string) => {
+    if (guardReadOnly()) return;
     setEditingTradeCell(null);
     setSavingTradeDocId(docId);
     const activeToken = token || localStorage.getItem('auth_token');
@@ -615,6 +1097,7 @@ export default function DashboardPage() {
   };
 
   const handleVerifyTradeDoc = async (docId: number) => {
+    if (guardReadOnly()) return;
     setVerifyingTradeDocId(docId);
     const activeToken = token || localStorage.getItem('auth_token');
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -658,6 +1141,7 @@ export default function DashboardPage() {
   };
 
   const handleDeleteTradeDoc = async (docId: number) => {
+    if (guardReadOnly()) return;
     setIsDeletingTradeDoc(true);
     const activeToken = token || localStorage.getItem('auth_token');
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -677,6 +1161,199 @@ export default function DashboardPage() {
       setIsDeletingTradeDoc(false);
     }
   };
+
+  // ─── E-WAY BILLS Handlers ──────────────────────────────────────────────────
+
+  const fetchEwayBills = async (options?: { manual?: boolean; silent?: boolean }) => {
+    if (!selectedFirm) return;
+    if (options?.manual) {
+      setIsRefreshingEwayBills(true);
+    } else if (!options?.silent) {
+      setIsLoadingEwayBills(true);
+    }
+    const activeToken = token || localStorage.getItem('auth_token');
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    try {
+      const res = await fetch(`${apiUrl}/api/firms/${selectedFirm.id}/eway-bills`, {
+        headers: { 'Authorization': `Bearer ${activeToken}` }
+      });
+      if (res.ok) setEwayBills(await res.json());
+    } catch (err) {
+      console.error('fetchEwayBills error:', err);
+    } finally {
+      setIsLoadingEwayBills(false);
+      setIsRefreshingEwayBills(false);
+    }
+  };
+
+  const handleEwayBillFilesSelected = async (fileList: FileList) => {
+    if (guardReadOnly()) return;
+    if (!selectedFirm) return;
+    const files = Array.from(fileList);
+    if (!files.length) return;
+
+    // Show progress entries immediately
+    const progressEntries = files.map((f) => ({ id: `${f.name}-${Date.now()}`, name: f.name, progress: 0 }));
+    setEwayBillUploadingFiles(progressEntries);
+    setEwayBillSummaryMsg('');
+
+    // Animate progress
+    const animateProgress = (id: string, target: number) => {
+      let p = 0;
+      const step = setInterval(() => {
+        p = Math.min(p + Math.random() * 18, target);
+        setEwayBillUploadingFiles((prev: any[]) =>
+          prev.map((f: any) => (f.id === id ? { ...f, progress: Math.round(p) } : f))
+        );
+        if (p >= target) clearInterval(step);
+      }, 120);
+    };
+    progressEntries.forEach((e) => animateProgress(e.id, 80));
+
+    const formData = new FormData();
+    files.forEach((f) => formData.append('files', f));
+
+    const activeToken = token || localStorage.getItem('auth_token');
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
+    try {
+      const res = await fetch(`${apiUrl}/api/firms/${selectedFirm.id}/eway-bills/upload`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${activeToken}` },
+        body: formData
+      });
+      const data = await res.json();
+
+      // Complete all progress bars
+      setEwayBillUploadingFiles((prev: any[]) =>
+        prev.map((f: any) => ({ ...f, progress: 100 }))
+      );
+
+      const count = (data.uploaded || []).length;
+      const errCount = (data.errors || []).length;
+      let msg = `${count} E-way bill${count !== 1 ? 's' : ''} queued for extraction | AI processing…`;
+      if (errCount > 0) msg += ` (${errCount} skipped)`;
+      setEwayBillSummaryMsg(msg);
+      setTimeout(() => setEwayBillUploadingFiles([]), 2500);
+
+      if (data.uploaded?.length) {
+        setEwayBills((prev: any[]) => [...data.uploaded, ...prev]);
+      }
+    } catch (err) {
+      setEwayBillSummaryMsg('Upload failed | connection error.');
+      setEwayBillUploadingFiles([]);
+    }
+  };
+
+  const handleEwayCellSave = async (billId: number, field: string) => {
+    if (guardReadOnly()) return;
+    setEditingEwayCell(null);
+    setSavingEwayBillId(billId);
+    const activeToken = token || localStorage.getItem('auth_token');
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    try {
+      const res = await fetch(`${apiUrl}/api/eway-bills/${billId}`, {
+        method: 'PUT',
+        headers: { 'Authorization': `Bearer ${activeToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [field]: editEwayValue })
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setEwayBills((prev: any[]) => prev.map((b: any) => (b.id === billId ? updated : b)));
+        triggerToast("E-way bill updated successfully.");
+      } else {
+        triggerToast("Failed to update E-way bill.");
+      }
+    } catch (err) {
+      triggerToast("Connection error saving changes.");
+    } finally {
+      setSavingEwayBillId(null);
+    }
+  };
+
+  const handleVerifyEwayBill = async (billId: number) => {
+    if (guardReadOnly()) return;
+    const activeToken = token || localStorage.getItem('auth_token');
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    try {
+      const res = await fetch(`${apiUrl}/api/eway-bills/${billId}/verify`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${activeToken}` }
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setEwayBills((prev: any[]) => prev.map((b: any) => (b.id === billId ? updated : b)));
+        triggerToast("E-way bill marked as verified.");
+      } else {
+        triggerToast("Failed to verify E-way bill.");
+      }
+    } catch (err) {
+      triggerToast("Connection error during verification.");
+    }
+  };
+
+  const handleRetryEwayExtraction = async (billId: number) => {
+    const activeToken = token || localStorage.getItem('auth_token');
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    try {
+      const res = await fetch(`${apiUrl}/api/eway-bills/${billId}/retry-extraction`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${activeToken}` }
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setEwayBills((prev: any[]) => prev.map((b: any) => (b.id === billId ? updated : b)));
+        triggerToast("AI extraction retrying...");
+      } else {
+        triggerToast("Failed to retry extraction.");
+      }
+    } catch (err) {
+      triggerToast("Connection error retrying extraction.");
+    }
+  };
+
+  const handleDeleteEwayBill = async (billId: number) => {
+    if (guardReadOnly()) return;
+    const activeToken = token || localStorage.getItem('auth_token');
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    try {
+      const res = await fetch(`${apiUrl}/api/eway-bills/${billId}/delete`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${activeToken}` }
+      });
+      if (res.ok) {
+        setEwayBills((prev: any[]) => prev.filter((b: any) => b.id !== billId));
+        triggerToast("E-way bill deleted successfully.");
+      } else {
+        triggerToast("Failed to delete E-way bill.");
+      }
+    } catch (err) {
+      triggerToast("Connection error deleting E-way bill.");
+    }
+  };
+
+  const handleLinkEwayBill = async (billId: number, beNumber: string) => {
+    const activeToken = token || localStorage.getItem('auth_token');
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    try {
+      const res = await fetch(`${apiUrl}/api/eway-bills/${billId}`, {
+        method: 'PUT',
+        headers: { 'Authorization': `Bearer ${activeToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ be_number: beNumber })
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setEwayBills((prev: any[]) => prev.map((b: any) => (b.id === billId ? updated : b)));
+        triggerToast(beNumber ? `Linked E-way bill successfully.` : `Unlinked E-way bill successfully.`);
+      } else {
+        triggerToast("Failed to link E-way bill.");
+      }
+    } catch (err) {
+      triggerToast("Connection error during linking.");
+    }
+  };
+
+  // ─── END E-WAY BILLS Handlers ──────────────────────────────────────────────
 
   // ─── END TRADE DOCS Handlers ───────────────────────────────────────────────
 
@@ -706,8 +1383,15 @@ export default function DashboardPage() {
   };
 
   const handleFilesSelected = async (fileList: FileList) => {
+    if (guardReadOnly()) return;
     if (!selectedFirm) return;
     const filesToUpload = Array.from(fileList);
+    
+    let filesToProcess = filesToUpload;
+    if (filesToUpload.length > 30) {
+      triggerToast("Maximum 30 bills can be processed at once. Slicing to the first 30.");
+      filesToProcess = filesToUpload.slice(0, 30);
+    }
     
     // Validations
     const allowedExtensions = ['.pdf', '.jpg', '.jpeg', '.png'];
@@ -715,7 +1399,7 @@ export default function DashboardPage() {
     const validFiles: File[] = [];
     const localErrors: string[] = [];
 
-    filesToUpload.forEach((f) => {
+    filesToProcess.forEach((f) => {
       const ext = f.name.substring(f.name.lastIndexOf('.')).toLowerCase();
       if (!allowedExtensions.includes(ext)) {
         localErrors.push(`File "${f.name}" format not allowed. Use PDF, JPG, PNG.`);
@@ -787,8 +1471,10 @@ export default function DashboardPage() {
 
         setSummaryMessage(`${validFiles.length} file(s) uploaded. Extraction tasks enqueued.`);
         setTimeout(() => setSummaryMessage(''), 6000);
+        triggerToast("Bills Uploaded Successfully");
 
         fetchBills();
+        refreshDashboardData();
       } else {
         setUploadingFiles((prev) => 
           prev.map((item) => 
@@ -814,6 +1500,7 @@ export default function DashboardPage() {
 
   // 5. Save Inline Spreadsheet Cell Edits
   const handleCellSave = async (billId: number, field: string) => {
+    if (guardReadOnly()) return;
     setEditingCell(null);
     setSavingBillId(billId);
     
@@ -822,7 +1509,7 @@ export default function DashboardPage() {
     const numericFields = ['taxable_amount', 'cgst', 'sgst', 'igst', 'cess', 'total_amount'];
     if (numericFields.includes(field)) {
       value = parseFloat(editValue) || 0.0;
-    } else if (field === 'party_gstin') {
+    } else if (field === 'party_gstin' || field === 'gstin_from' || field === 'gstin_to') {
       value = editValue.trim().toUpperCase() || null;
     } else if (field === 'invoice_date') {
       value = editValue.trim() || null;
@@ -863,6 +1550,7 @@ export default function DashboardPage() {
 
   // 6. Verify Invoice
   const handleVerifyBill = async (billId: number) => {
+    if (guardReadOnly()) return;
     setVerifyingBillId(billId);
     const activeToken = token || localStorage.getItem('auth_token');
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -876,7 +1564,9 @@ export default function DashboardPage() {
       });
       if (res.ok) {
         setBills((prev) => prev.map((b) => b.id === billId ? { ...b, status: 'verified' } : b));
+        setOverviewBills((prev) => prev.map((b) => b.id === billId ? { ...b, status: 'verified' } : b));
         triggerToast("Invoice successfully marked as verified.");
+        refreshDashboardData();
       } else {
         const data = await res.json();
         triggerToast(data.error || "Verification failed.");
@@ -920,8 +1610,10 @@ export default function DashboardPage() {
   const getFilteredBills = () => {
     // Filter by type: Purchase or Sale
     const typedBills = bills.filter((b) => {
-      const type = b.raw_data?.bill_type || 'purchase';
-      return type === invoiceType;
+      if (invoiceType === 'all') return true;
+      const type = (b.raw_data?.bill_type || 'purchase').toLowerCase();
+      const mappedType = (type === 'sale' || type === 'sales') ? 'sales' : 'purchase';
+      return mappedType === invoiceType;
     });
 
     if (includeUnverified) {
@@ -930,6 +1622,15 @@ export default function DashboardPage() {
     }
     // Only verified rows
     return typedBills.filter((b) => b.status === 'verified');
+  };
+
+  const getFilteredBillsForGrid = () => {
+    return bills.filter((b) => {
+      if (invoiceType === 'all') return true;
+      const type = (b.raw_data?.bill_type || 'purchase').toLowerCase();
+      const mappedType = (type === 'sale' || type === 'sales') ? 'sales' : 'purchase';
+      return mappedType === invoiceType;
+    });
   };
 
   const filteredBillsForStats = getFilteredBills();
@@ -954,7 +1655,7 @@ export default function DashboardPage() {
     return (
       <div className="flex min-h-screen bg-bg-primary text-text-primary font-sans items-center justify-center transition-colors duration-200">
         <div className="flex flex-col items-center gap-4 text-text-secondary font-mono text-xs">
-          <Loader2 className="w-8 h-8 animate-spin text-text-primary" />
+          <ThreeDotLoader size="lg" />
           <p>Loading workspace…</p>
         </div>
       </div>
@@ -966,7 +1667,7 @@ export default function DashboardPage() {
     return (
       <div className="flex flex-col min-h-screen bg-bg-primary text-text-primary font-sans transition-colors duration-200 selection:bg-text-primary selection:text-bg-primary">
         <header className="w-full flex justify-between items-center px-4 md:px-8 py-6 max-w-7xl mx-auto">
-          <div className="text-lg font-bold tracking-tight">LedgerPro</div>
+          <LedgerProLogo size="sm" href="/" />
           <button
             onClick={toggleTheme}
             className="p-2 border border-border-subtle rounded hover:bg-bg-secondary transition-colors"
@@ -983,18 +1684,24 @@ export default function DashboardPage() {
           </div>
 
           <div className="space-y-2">
-            <h2 className="text-2xl font-bold tracking-tight">Connect your first firm</h2>
+            <h2 className="text-2xl font-bold tracking-tight">
+              {isReadOnly ? 'No firms linked yet' : 'Connect your first firm'}
+            </h2>
             <p className="text-sm text-text-secondary max-w-xs mx-auto leading-relaxed">
-              Welcome to LedgerPro v2. Add your first corporate client or bookkeeping ledger to access automation workspaces.
+              {isReadOnly
+                ? 'Ask your accountant to add your business and use your owner email. Once registered, your firms will appear here in read-only mode.'
+                : 'Welcome to LedgerPro. Add your first corporate client or bookkeeping ledger to access automation workspaces.'}
             </p>
           </div>
 
-          <button
-            onClick={() => setIsModalOpen(true)}
-            className="w-full py-3 bg-accent text-accent-foreground font-semibold rounded hover:opacity-90 transition-all flex items-center justify-center gap-2 active:scale-98"
-          >
-            <Plus className="w-4 h-4" /> Add Client Firm
-          </button>
+          {!isReadOnly && (
+            <button
+              onClick={() => setIsModalOpen(true)}
+              className="w-full py-3 bg-accent text-accent-foreground font-semibold rounded hover:opacity-90 transition-all flex items-center justify-center gap-2 active:scale-98"
+            >
+              <Plus className="w-4 h-4" /> Add Client Firm
+            </button>
+          )}
           </div>
         </div>
 
@@ -1027,21 +1734,37 @@ export default function DashboardPage() {
       </div>
 
       {/* Sidebar Navigation — desktop */}
-      <aside className="w-64 border-r border-border-subtle bg-bg-secondary flex flex-col justify-between hidden md:flex shrink-0">
+      <aside className="w-64 h-screen sticky top-0 border-r border-border-subtle bg-bg-secondary flex flex-col justify-between hidden md:flex shrink-0">
         <div className="p-6 space-y-8">
           <div className="flex items-center gap-2">
-            <span className="text-xl font-bold tracking-tight">LedgerPro</span>
-            <span className="text-[10px] font-mono px-1.5 py-0.5 border border-border-subtle rounded bg-bg-primary">
-              v2.0
-            </span>
+          <LedgerProLogo size="sm" href="/" />
           </div>
 
-          <DashboardNav activeTab={activeTab} onTabChange={setActiveTab} />
+          <DashboardNav activeTab={activeTab} onTabChange={setActiveTab} showActivity={isReadOnly} />
         </div>
 
-        <div className="p-6 border-t border-border-subtle text-xs font-mono text-text-secondary">
-          <div>Workspace Connected</div>
-          <div className="flex items-center gap-1.5 mt-1 text-green-500 font-bold">
+        <div className="p-4 border-t border-border-subtle space-y-4">
+          <div className="space-y-1">
+            <button
+              onClick={() => setActiveTab('settings')}
+              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                activeTab === 'settings'
+                  ? 'bg-accent text-accent-foreground shadow-sm'
+                  : 'text-text-secondary hover:text-text-primary hover:bg-bg-primary'
+              }`}
+            >
+              <User className="w-4 h-4" />
+              <span>Profile Settings</span>
+            </button>
+            <button
+              onClick={logout}
+              className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-red-500 hover:bg-red-500/10 transition-all"
+            >
+              <LogOut className="w-4 h-4" />
+              <span>Log Out</span>
+            </button>
+          </div>
+          <div className="px-3 text-[10px] text-text-secondary font-mono flex items-center gap-1.5 font-bold">
             <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
             Operational
           </div>
@@ -1060,10 +1783,7 @@ export default function DashboardPage() {
             <div className="p-6 space-y-8">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <span className="text-xl font-bold tracking-tight">LedgerPro</span>
-                  <span className="text-[10px] font-mono px-1.5 py-0.5 border border-border-subtle rounded bg-bg-primary">
-                    v2.0
-                  </span>
+                <LedgerProLogo size="sm" href="/" />
                 </div>
                 <button
                   onClick={() => setMobileNavOpen(false)}
@@ -1078,11 +1798,37 @@ export default function DashboardPage() {
                 onTabChange={setActiveTab}
                 onNavigate={() => setMobileNavOpen(false)}
                 layout="drawer"
+                showActivity={isReadOnly}
               />
             </div>
-            <div className="p-6 border-t border-border-subtle text-xs font-mono text-text-secondary">
-              <div>Workspace Connected</div>
-              <div className="flex items-center gap-1.5 mt-1 text-green-500 font-bold">
+            <div className="p-4 border-t border-border-subtle space-y-4">
+              <div className="space-y-1">
+                <button
+                  onClick={() => {
+                    setActiveTab('settings');
+                    setMobileNavOpen(false);
+                  }}
+                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                    activeTab === 'settings'
+                      ? 'bg-accent text-accent-foreground shadow-sm'
+                      : 'text-text-secondary hover:text-text-primary hover:bg-bg-primary'
+                  }`}
+                >
+                  <User className="w-4 h-4" />
+                  <span>Profile Settings</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setMobileNavOpen(false);
+                    logout();
+                  }}
+                  className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-red-500 hover:bg-red-500/10 transition-all"
+                >
+                  <LogOut className="w-4 h-4" />
+                  <span>Log Out</span>
+                </button>
+              </div>
+              <div className="px-3 text-[10px] text-text-secondary font-mono flex items-center gap-1.5 font-bold">
                 <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
                 Operational
               </div>
@@ -1095,7 +1841,7 @@ export default function DashboardPage() {
       <div className="flex-1 flex flex-col min-h-screen min-w-0">
         
         {/* Top Header */}
-        <header className="h-16 border-b border-border-subtle bg-bg-primary flex items-center justify-between px-4 md:px-8 transition-colors duration-200 shrink-0">
+        <header className="h-16 border-b border-border-subtle bg-bg-primary flex items-center justify-between px-4 md:px-8 transition-colors duration-200 shrink-0 sticky top-0 z-30">
           <div className="flex items-center gap-3 md:gap-6 min-w-0">
             <button
               onClick={() => setMobileNavOpen(true)}
@@ -1105,7 +1851,7 @@ export default function DashboardPage() {
               <Menu className="w-4 h-4" />
             </button>
             <div className="md:hidden flex items-center gap-2 shrink-0">
-              <span className="text-lg font-bold tracking-tight">LedgerPro</span>
+              <LedgerProLogo size="sm" href="/" />
             </div>
 
             {/* Firm Switcher Dropdown */}
@@ -1123,65 +1869,100 @@ export default function DashboardPage() {
                 className="bg-bg-secondary border border-border-subtle rounded px-3 py-1.5 text-xs text-text-primary focus:outline-none focus:border-accent font-medium font-mono cursor-pointer"
               >
                 <option value="" disabled>Select Firm</option>
-                {firms.map((firm) => (
+                {firms.filter(firm => firm.status === 'active').map((firm) => (
                   <option 
                     key={firm.id} 
                     value={firm.id} 
-                    disabled={firm.status !== 'active'}
                   >
-                    {firm.name} {firm.status !== 'active' ? ' (Verification Pending)' : ''}
+                    {firm.name}
                   </option>
                 ))}
               </select>
             </div>
 
-            <button
-              onClick={() => setIsModalOpen(true)}
-              className="px-2.5 py-1.5 border border-border-subtle rounded text-xs hover:bg-bg-secondary transition-all font-mono flex items-center gap-1"
-            >
-              <Plus className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Add Client</span>
-            </button>
+            {!isReadOnly && (
+              <button
+                onClick={() => setIsModalOpen(true)}
+                className="px-2.5 py-1.5 border border-border-subtle rounded text-xs hover:bg-bg-secondary transition-all font-mono flex items-center gap-1"
+              >
+                <Plus className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Add Client</span>
+              </button>
+            )}
+            {isReadOnly && (
+              <span className="px-2.5 py-1.5 border border-border-subtle rounded text-[10px] font-mono text-text-secondary flex items-center gap-1">
+                <Shield className="w-3.5 h-3.5" /> Read-only
+              </span>
+            )}
           </div>
 
           <div className="flex items-center gap-4">
+            {/* Theme Toggle — sleek, small, borderless */}
             <button
               onClick={toggleTheme}
-              className="p-2 border border-border-subtle rounded hover:bg-bg-secondary transition-colors"
+              className="p-1 hover:text-text-primary text-text-secondary transition-colors"
               aria-label="Toggle Theme"
             >
-              {theme === 'light' ? <Moon className="w-4.5 h-4.5" /> : <Sun className="w-4.5 h-4.5" />}
+              {theme === 'light' ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
             </button>
 
             {/* User Dropdown */}
             <div className="relative">
               <button
                 onClick={() => setUserDropdownOpen(!userDropdownOpen)}
-                className="flex items-center gap-2 p-1.5 border border-border-subtle rounded hover:bg-bg-secondary transition-colors"
+                className="w-8 h-8 rounded-full overflow-hidden hover:opacity-85 transition-opacity focus:outline-none flex items-center justify-center border border-border-subtle"
+                aria-label="User Menu"
               >
-                {user?.avatar ? (
-                  <img src={user.avatar} alt={user.name} className="w-5 h-5 rounded-full border border-border-subtle" />
+                {user?.avatar && user.avatar.startsWith('data:') ? (
+                  <img src={user.avatar} alt={user.name} className="w-full h-full object-cover" />
                 ) : (
-                  <div className="w-5 h-5 rounded-full bg-accent text-accent-foreground text-[10px] font-bold flex items-center justify-center">
-                    {user?.name?.charAt(0).toUpperCase() || 'A'}
+                  <div className="w-full h-full bg-neutral-950 dark:bg-neutral-50 text-neutral-50 dark:text-neutral-950 text-xs font-bold flex items-center justify-center">
+                    {getInitials(user?.name || '')}
                   </div>
                 )}
-                <span className="text-xs font-semibold font-mono hidden sm:inline">{user?.name}</span>
-                <ChevronDown className="w-3.5 h-3.5 text-text-secondary" />
               </button>
 
               {userDropdownOpen && (
-                <div className="absolute right-0 mt-2 w-48 border border-border-subtle rounded-md bg-bg-secondary p-2 shadow-xl z-50 animate-in fade-in slide-in-from-top-2 duration-100">
-                  <div className="px-3 py-2 border-b border-border-subtle text-xs space-y-0.5">
-                    <div className="font-bold text-text-primary">{user?.name}</div>
-                    <div className="text-text-secondary font-mono truncate">{user?.email}</div>
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setUserDropdownOpen(false)} />
+                  <div className="absolute right-0 mt-2 w-52 border border-border-subtle rounded-xl bg-bg-secondary p-1.5 shadow-2xl z-50 animate-in fade-in slide-in-from-top-2 duration-100">
+                    <div className="px-3 py-2 border-b border-border-subtle text-xs space-y-0.5 mb-1">
+                      <div className="font-bold text-text-primary">{user?.name}</div>
+                      <div className="text-text-secondary truncate">{user?.email}</div>
+                    </div>
+                    
+                    <button
+                      onClick={() => {
+                        setActiveTab('settings');
+                        setUserDropdownOpen(false);
+                      }}
+                      className="w-full text-left px-3 py-2 text-xs font-medium hover:bg-bg-primary rounded-lg text-text-primary flex items-center gap-2 transition-colors"
+                    >
+                      <User className="w-3.5 h-3.5 text-text-secondary" /> Profile
+                    </button>
+                    
+                    <button
+                      onClick={() => {
+                        setActiveTab('settings');
+                        setUserDropdownOpen(false);
+                      }}
+                      className="w-full text-left px-3 py-2 text-xs font-medium hover:bg-bg-primary rounded-lg text-text-primary flex items-center gap-2 transition-colors"
+                    >
+                      <Settings className="w-3.5 h-3.5 text-text-secondary" /> Settings
+                    </button>
+                    
+                    <div className="border-t border-border-subtle my-1" />
+                    
+                    <button
+                      onClick={() => {
+                        setUserDropdownOpen(false);
+                        logout();
+                      }}
+                      className="w-full text-left px-3 py-2 text-xs font-semibold hover:bg-bg-primary rounded-lg text-red-500 flex items-center gap-2 transition-colors"
+                    >
+                      <LogOut className="w-3.5 h-3.5" /> Log Out
+                    </button>
                   </div>
-                  <button
-                    onClick={logout}
-                    className="w-full text-left px-3 py-2 text-xs font-semibold hover:bg-bg-primary rounded text-red-500 flex items-center gap-2 mt-1"
-                  >
-                    <LogOut className="w-3.5 h-3.5" /> Log Out
-                  </button>
-                </div>
+                </>
               )}
             </div>
           </div>
@@ -1198,7 +1979,7 @@ export default function DashboardPage() {
                 <div>
                   <h1 className="text-3xl font-extrabold tracking-tight">Overview</h1>
                   <p className="text-sm text-text-secondary mt-1">
-                    Verified invoice analytics for <span className="font-semibold text-text-primary">{selectedFirm?.name || 'your firm'}</span>. Only confirmed bills are counted.
+                    Invoice analytics for <span className="font-semibold text-text-primary">{selectedFirm?.name || 'your firm'}</span>. Includes extracted and verified bills.
                   </p>
                 </div>
 
@@ -1235,16 +2016,18 @@ export default function DashboardPage() {
                 <div className="flex flex-col items-center justify-center p-12 md:p-20 border border-dashed border-border-subtle rounded-lg bg-bg-secondary/10 text-center space-y-4">
                   <Building className="w-12 h-12 text-text-secondary opacity-50" />
                   <p className="font-mono text-sm text-text-secondary">No firm selected. Choose a client workspace from the header selector.</p>
+                  {!isReadOnly && (
                   <button
                     onClick={() => setIsModalOpen(true)}
                     className="px-4 py-2 bg-accent text-accent-foreground text-xs font-semibold rounded hover:opacity-90 transition-all flex items-center gap-2"
                   >
                     <Plus className="w-3.5 h-3.5" /> Add Client Firm
                   </button>
+                  )}
                 </div>
               ) : isLoadingAnalytics && !analyticsSummary ? (
                 <div className="flex flex-col items-center justify-center py-20 gap-4 text-text-secondary font-mono text-xs">
-                  <Loader2 className="w-8 h-8 animate-spin text-text-primary" />
+                  <ThreeDotLoader size="lg" />
                   <p>Loading analytics…</p>
                 </div>
               ) : (
@@ -1255,6 +2038,7 @@ export default function DashboardPage() {
                     {/* Total Sales Card — click drills into Sales invoices */}
                     <button
                       onClick={() => {
+                        setInvoiceType('sales');
                         setBillTypeFilter('sale');
                         if (analyticsSummary?.period_start) setStartDate(analyticsSummary.period_start);
                         if (analyticsSummary?.period_end) setEndDate(analyticsSummary.period_end);
@@ -1270,13 +2054,14 @@ export default function DashboardPage() {
                         ₹{((analyticsSummary?.total_sales_turnover || 0) / 100000).toFixed(2)}L
                       </div>
                       <div className="text-[10px] font-mono text-text-secondary">
-                        Taxable turnover · {analyticsSummary?.range || analyticsRange} · verified only
+                        Taxable turnover · {analyticsSummary?.range || analyticsRange} · extracted + verified
                       </div>
                     </button>
 
                     {/* Total Purchases Card — click drills into Purchase invoices */}
                     <button
                       onClick={() => {
+                        setInvoiceType('purchase');
                         setBillTypeFilter('purchase');
                         if (analyticsSummary?.period_start) setStartDate(analyticsSummary.period_start);
                         if (analyticsSummary?.period_end) setEndDate(analyticsSummary.period_end);
@@ -1292,7 +2077,7 @@ export default function DashboardPage() {
                         ₹{((analyticsSummary?.total_purchase_turnover || 0) / 100000).toFixed(2)}L
                       </div>
                       <div className="text-[10px] font-mono text-text-secondary">
-                        Taxable turnover · {analyticsSummary?.range || analyticsRange} · verified only
+                        Taxable turnover · {analyticsSummary?.range || analyticsRange} · extracted + verified
                       </div>
                     </button>
 
@@ -1326,10 +2111,10 @@ export default function DashboardPage() {
                   {/* ── QUICK LEDGER COUNTERS ── */}
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 font-mono text-xs">
                     {[
-                      { label: 'Total Bills', value: bills.length },
-                      { label: 'Needs Review', value: bills.filter(b => b.status === 'needs_review').length },
-                      { label: 'Verified', value: bills.filter(b => b.status === 'verified').length },
-                      { label: 'Processing', value: bills.filter(b => b.status === 'processing').length },
+                      { label: 'Total Bills', value: overviewBills.length },
+                      { label: 'Needs Review', value: overviewBills.filter(b => b.status === 'needs_review').length },
+                      { label: 'Verified', value: overviewBills.filter(b => b.status === 'verified').length },
+                      { label: 'Processing', value: overviewBills.filter(b => b.status === 'processing').length },
                     ].map((s) => (
                       <div key={s.label} className="border border-border-subtle rounded-lg p-3 bg-bg-secondary flex flex-col gap-1">
                         <span className="text-[9px] uppercase tracking-wider text-text-secondary font-bold">{s.label}</span>
@@ -1350,8 +2135,8 @@ export default function DashboardPage() {
                       {analyticsTurnover.length === 0 ? (
                         <div className="h-56 flex flex-col items-center justify-center gap-3 text-text-secondary font-mono text-xs">
                           <BarChart2 className="w-8 h-8 opacity-40" />
-                          <p>No verified invoices for this period.</p>
-                          <p className="text-[10px]">Verify bills in the Invoices tab to populate charts.</p>
+                          <p>No invoice data for this period.</p>
+                          <p className="text-[10px]">Upload bills or verify extracted invoices to populate charts.</p>
                           <button
                             onClick={() => setActiveTab('invoices')}
                             className="mt-1 px-3 py-1.5 bg-accent text-accent-foreground text-[10px] font-semibold rounded hover:opacity-90 transition-all"
@@ -1361,8 +2146,8 @@ export default function DashboardPage() {
                         </div>
                       ) : (
                         <ResponsiveContainer width="100%" height={220}>
-                          <LineChart data={analyticsTurnover} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-subtle, #e5e7eb)" strokeOpacity={0.5} />
+                          <BarChart data={analyticsTurnover} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-subtle, #e5e7eb)" strokeOpacity={0.2} />
                             <XAxis
                               dataKey="label"
                               tick={{ fontSize: 10, fill: 'var(--color-text-secondary, #6b7280)', fontFamily: 'monospace' }}
@@ -1388,26 +2173,19 @@ export default function DashboardPage() {
                             <Legend
                               wrapperStyle={{ fontSize: '10px', fontFamily: 'monospace', textTransform: 'capitalize' }}
                             />
-                            <Line
-                              type="monotone"
+                            <Bar
                               dataKey="purchase"
                               name="Purchase"
-                              stroke="var(--color-text-primary, #111827)"
-                              strokeWidth={2}
-                              dot={{ r: 3, fill: 'var(--color-text-primary, #111827)' }}
-                              activeDot={{ r: 5 }}
+                              fill="#8B5CF6"
+                              radius={[4, 4, 0, 0]}
                             />
-                            <Line
-                              type="monotone"
+                            <Bar
                               dataKey="sale"
                               name="Sale"
-                              stroke="var(--color-text-secondary, #6b7280)"
-                              strokeWidth={2}
-                              strokeDasharray="5 3"
-                              dot={{ r: 3, fill: 'var(--color-text-secondary, #6b7280)' }}
-                              activeDot={{ r: 5 }}
+                              fill="#06B6D4"
+                              radius={[4, 4, 0, 0]}
                             />
-                          </LineChart>
+                          </BarChart>
                         </ResponsiveContainer>
                       )}
                     </div>
@@ -1452,7 +2230,7 @@ export default function DashboardPage() {
                                 {(analyticsSummary?.purchase_vs_sale || []).map((_: any, i: number) => (
                                   <Cell
                                     key={`cell-${i}`}
-                                    fill={i === 0 ? 'var(--color-text-primary, #111827)' : 'var(--color-text-secondary, #9ca3af)'}
+                                    fill={i === 0 ? '#8B5CF6' : '#06B6D4'}
                                     cursor="pointer"
                                   />
                                 ))}
@@ -1474,7 +2252,7 @@ export default function DashboardPage() {
                             {(analyticsSummary?.purchase_vs_sale || []).map((item: any, i: number) => (
                               <div key={item.name} className="flex items-center justify-between">
                                 <div className="flex items-center gap-2">
-                                  <span className={`w-2.5 h-2.5 rounded-full ${i === 0 ? 'bg-text-primary' : 'bg-text-secondary'}`} />
+                                  <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: i === 0 ? '#8B5CF6' : '#06B6D4' }} />
                                   <span className="text-text-secondary">{item.name}</span>
                                 </div>
                                 <span className="font-bold">₹{Number(item.value).toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
@@ -1501,14 +2279,117 @@ export default function DashboardPage() {
                       </span>
                     </div>
                     <div className="grid sm:grid-cols-4 gap-4 border-t border-border-subtle pt-4 text-xs font-mono">
-                      <div><span className="text-text-secondary block">GSTIN</span><span className="font-semibold">{selectedFirm?.gstin || '—'}</span></div>
+                      <div><span className="text-text-secondary block">GSTIN</span><span className="font-semibold">{selectedFirm?.gstin || 'N/A'}</span></div>
                       <div><span className="text-text-secondary block">Owner</span><span className="font-semibold">{selectedFirm?.owner_email}</span></div>
                       <div><span className="text-text-secondary block">Location</span><span className="font-semibold">{selectedFirm?.city}, {selectedFirm?.state}</span></div>
-                      <div><span className="text-text-secondary block">Registered</span><span className="font-semibold">{selectedFirm ? new Date(selectedFirm.created_at).toLocaleDateString() : '—'}</span></div>
+                      <div><span className="text-text-secondary block">Registered</span><span className="font-semibold">{selectedFirm ? new Date(selectedFirm.created_at).toLocaleDateString() : 'N/A'}</span></div>
                     </div>
                   </div>
                 </>
               )}
+            </div>
+          )}
+
+          {/* TAB: ACTIVITY (owner login only) */}
+          {isReadOnly && activeTab === 'activity' && (
+            <div className="space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div>
+                  <h1 className="text-3xl font-extrabold tracking-tight">Activity</h1>
+                  <p className="text-sm text-text-secondary mt-1">
+                    Who accessed <span className="font-semibold text-text-primary">{selectedFirm?.name}</span>, when they logged in, and what work was done.
+                  </p>
+                </div>
+                <button
+                  onClick={fetchActivity}
+                  className="px-3 py-1.5 border border-border-subtle rounded text-xs font-mono hover:bg-bg-secondary flex items-center gap-1.5"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${activityLoading ? 'animate-spin' : ''}`} /> Refresh
+                </button>
+              </div>
+
+              <div className="grid sm:grid-cols-3 gap-4">
+                <div className="border border-border-subtle rounded-lg bg-bg-secondary p-4">
+                  <p className="text-[10px] font-mono uppercase text-text-secondary">Firm logins</p>
+                  <p className="text-2xl font-bold mt-1">{activityData?.login_count ?? '—'}</p>
+                </div>
+                <div className="border border-border-subtle rounded-lg bg-bg-secondary p-4">
+                  <p className="text-[10px] font-mono uppercase text-text-secondary">Work actions</p>
+                  <p className="text-2xl font-bold mt-1">{activityData?.work_count ?? '—'}</p>
+                </div>
+                <div className="border border-border-subtle rounded-lg bg-bg-secondary p-4">
+                  <p className="text-[10px] font-mono uppercase text-text-secondary">File uploads</p>
+                  <p className="text-2xl font-bold mt-1">{activityData?.uploads?.length ?? '—'}</p>
+                </div>
+              </div>
+
+              <div className="grid lg:grid-cols-2 gap-6">
+                <div className="border border-border-subtle rounded-lg bg-bg-secondary overflow-hidden">
+                  <div className="px-4 py-3 border-b border-border-subtle flex items-center gap-2">
+                    <Shield className="w-4 h-4" />
+                    <h3 className="text-sm font-bold">Login history</h3>
+                  </div>
+                  <div className="max-h-[420px] overflow-y-auto divide-y divide-border-subtle">
+                    {activityLoading && !activityData ? (
+                      <div className="p-8 text-center text-xs text-text-secondary font-mono">Loading…</div>
+                    ) : (activityData?.events || []).filter((e: any) => e.kind === 'login').length === 0 ? (
+                      <div className="p-8 text-center text-xs text-text-secondary font-mono">No logins recorded yet.</div>
+                    ) : (
+                      (activityData?.events || [])
+                        .filter((e: any) => e.kind === 'login')
+                        .map((e: any) => (
+                          <div key={e.id} className="px-4 py-3 text-sm space-y-1">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-semibold">{e.actor_name}</span>
+                              <span className="text-[10px] font-mono text-text-secondary">
+                                {new Date(e.timestamp).toLocaleString()}
+                              </span>
+                            </div>
+                            <p className="text-xs text-text-secondary">{e.actor_email}</p>
+                            <p className="text-[10px] font-mono text-text-secondary capitalize">
+                              {e.actor_role || 'user'} · {e.details?.ip_address || 'IP unknown'}
+                            </p>
+                          </div>
+                        ))
+                    )}
+                  </div>
+                </div>
+
+                <div className="border border-border-subtle rounded-lg bg-bg-secondary overflow-hidden">
+                  <div className="px-4 py-3 border-b border-border-subtle flex items-center gap-2">
+                    <Upload className="w-4 h-4" />
+                    <h3 className="text-sm font-bold">Uploads &amp; work</h3>
+                  </div>
+                  <div className="max-h-[420px] overflow-y-auto divide-y divide-border-subtle">
+                    {activityLoading && !activityData ? (
+                      <div className="p-8 text-center text-xs text-text-secondary font-mono">Loading…</div>
+                    ) : (activityData?.events || []).filter((e: any) => e.kind === 'work').length === 0 ? (
+                      <div className="p-8 text-center text-xs text-text-secondary font-mono">No document activity yet.</div>
+                    ) : (
+                      (activityData?.events || [])
+                        .filter((e: any) => e.kind === 'work')
+                        .map((e: any) => (
+                          <div key={e.id} className="px-4 py-3 text-sm space-y-1">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-semibold capitalize">{e.action.replace(/_/g, ' ')}</span>
+                              <span className="text-[10px] font-mono text-text-secondary">
+                                {new Date(e.timestamp).toLocaleString()}
+                              </span>
+                            </div>
+                            <p className="text-xs text-text-secondary">
+                              {e.actor_name} ({e.actor_email})
+                            </p>
+                            <p className="text-[10px] font-mono text-text-secondary">
+                              {e.resource_label || e.resource_type}
+                              {e.resource_id ? ` #${e.resource_id}` : ''}
+                              {e.details?.file_name ? ` · ${e.details.file_name}` : ''}
+                            </p>
+                          </div>
+                        ))
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 
@@ -1524,6 +2405,12 @@ export default function DashboardPage() {
                 </div>
 
                 <div className="flex border border-border-subtle rounded overflow-hidden font-mono text-xs">
+                  <button 
+                    onClick={() => setInvoiceType('all')}
+                    className={`px-3 py-1.5 ${invoiceType === 'all' ? 'bg-accent text-accent-foreground font-bold' : 'bg-bg-secondary hover:bg-bg-primary'}`}
+                  >
+                    All Invoices
+                  </button>
                   <button 
                     onClick={() => setInvoiceType('purchase')}
                     className={`px-3 py-1.5 ${invoiceType === 'purchase' ? 'bg-accent text-accent-foreground font-bold' : 'bg-bg-secondary hover:bg-bg-primary'}`}
@@ -1620,6 +2507,7 @@ export default function DashboardPage() {
                   </div>
 
                   {/* Upload Drop Zone Panel */}
+                  {!isReadOnly && (
                   <div 
                     onDragOver={handleDragOver}
                     onDragLeave={handleDragLeave}
@@ -1649,13 +2537,28 @@ export default function DashboardPage() {
                       <p className="text-xs text-text-secondary">Supports PDF, JPG, PNG up to 10MB per file</p>
                     </div>
                   </div>
+                  )}
+                  {isReadOnly && (
+                    <div className="border border-border-subtle rounded-lg p-4 bg-bg-secondary/40 text-xs text-text-secondary font-mono flex items-center gap-2">
+                      <Shield className="w-4 h-4 shrink-0" />
+                      Viewing invoices in read-only mode. Uploads and edits are disabled for owners.
+                    </div>
+                  )}
 
                   {/* Summary progress bar */}
                   {(uploadingFiles.length > 0 || summaryMessage) && (
                     <div className="border border-border-subtle rounded-lg bg-bg-secondary p-5 space-y-4">
                       {summaryMessage && (
-                        <div className="text-xs font-mono text-text-primary font-bold flex items-center gap-2">
-                          <CheckCircle2 className="w-4 h-4 text-green-500" /> {summaryMessage}
+                        <div className="text-xs font-mono text-text-primary font-bold flex items-center justify-between gap-2">
+                          <span className="flex items-center gap-2">
+                            <CheckCircle2 className="w-4 h-4 text-green-500" /> {summaryMessage}
+                          </span>
+                          <button
+                            onClick={() => fileInputRef.current?.click()}
+                            className="px-2.5 py-1 border border-border-subtle rounded hover:bg-bg-primary text-[10px] font-semibold transition-all flex items-center gap-1 text-text-primary"
+                          >
+                            <Plus className="w-3 h-3" /> Upload More
+                          </button>
                         </div>
                       )}
                       
@@ -1682,25 +2585,12 @@ export default function DashboardPage() {
                       )}
                     </div>
                   )}
-
-                  {/* Calculation summaries widget */}
                   <div className="border border-border-subtle rounded-lg bg-bg-secondary p-6 space-y-6">
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                       <div>
                         <h3 className="text-lg font-bold">Workspace Ledger Summaries</h3>
                         <p className="text-xs text-text-secondary font-mono mt-0.5">Summary is calculated from target bills.</p>
                       </div>
-
-                      {/* Include Unverified Toggle */}
-                      <label className="flex items-center gap-2 text-xs font-mono text-text-primary cursor-pointer select-none">
-                        <input 
-                          type="checkbox" 
-                          checked={includeUnverified}
-                          onChange={(e) => setIncludeUnverified(e.target.checked)}
-                          className="w-4 h-4 accent-black dark:accent-white cursor-pointer"
-                        />
-                        Include unverified entries
-                      </label>
                     </div>
 
                     <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 text-sm font-mono pt-4 border-t border-border-subtle">
@@ -1731,18 +2621,45 @@ export default function DashboardPage() {
                   <div className="space-y-4">
                     <div className="flex justify-between items-center">
                       <h3 className="text-lg font-bold tracking-tight">Audit Verification Grid</h3>
-                      <button
-                        onClick={handleGenerateExcel}
-                        disabled={bills.length === 0}
-                        className="px-3 py-1.5 bg-accent text-accent-foreground text-xs font-semibold rounded hover:opacity-90 active:scale-95 transition-all flex items-center gap-1.5 disabled:opacity-50 font-mono"
-                      >
-                        <FileText className="w-4 h-4" /> Generate Excel
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => fileInputRef.current?.click()}
+                          className="px-3 py-1.5 border border-border-subtle rounded hover:bg-bg-secondary text-xs font-semibold flex items-center gap-1.5 active:scale-95 transition-all font-mono text-text-primary"
+                        >
+                          <Upload className="w-4 h-4" /> Upload More
+                        </button>
+                        <input
+                          type="file"
+                          ref={excelInputRef}
+                          accept=".xlsx"
+                          onChange={handleImportExcel}
+                          className="hidden"
+                        />
+                        <button
+                          onClick={() => excelInputRef.current?.click()}
+                          disabled={isImportingExcel}
+                          className="px-3 py-1.5 border border-border-subtle rounded hover:bg-bg-secondary text-xs font-semibold flex items-center gap-1.5 active:scale-95 transition-all disabled:opacity-50 font-mono text-text-primary"
+                        >
+                          {isImportingExcel ? (
+                            <ThreeDotLoader size="sm" />
+                          ) : (
+                            <Plus className="w-4 h-4" />
+                          )}
+                          Add in Existing Excel
+                        </button>
+                        <button
+                          onClick={handleGenerateExcel}
+                          disabled={bills.length === 0}
+                          className="px-3 py-1.5 bg-accent text-accent-foreground text-xs font-semibold rounded hover:opacity-90 active:scale-95 transition-all flex items-center gap-1.5 disabled:opacity-50 font-mono"
+                        >
+                          <FileText className="w-4 h-4" /> Generate Excel
+                        </button>
+                      </div>
                     </div>
                     
                     {isInitialBillsLoad && isLoadingBills ? (
                       <div className="border border-dashed border-border-subtle rounded-lg p-12 flex flex-col items-center justify-center gap-3 text-text-secondary font-mono text-xs bg-bg-secondary/5">
-                        <Loader2 className="w-8 h-8 animate-spin text-text-primary" />
+                        <ThreeDotLoader size="lg" />
                         <p>Loading invoices…</p>
                       </div>
                     ) : bills.length === 0 ? (
@@ -1756,6 +2673,17 @@ export default function DashboardPage() {
                           <Upload className="w-3.5 h-3.5" /> Upload Invoices
                         </button>
                       </div>
+                    ) : getFilteredBillsForGrid().length === 0 ? (
+                      <div className="border border-dashed border-border-subtle rounded-lg p-12 text-center text-xs text-text-secondary font-mono bg-bg-secondary/5 flex flex-col items-center gap-4">
+                        <Upload className="w-10 h-10 opacity-40" />
+                        <p>No {invoiceType === 'all' ? 'invoices' : invoiceType === 'sales' ? 'sales invoices' : 'purchase bills'} found in this workspace.</p>
+                        <button
+                          onClick={() => fileInputRef.current?.click()}
+                          className="px-4 py-2 bg-accent text-accent-foreground text-xs font-semibold rounded hover:opacity-90 transition-all flex items-center gap-2"
+                        >
+                          <Upload className="w-3.5 h-3.5" /> Upload More
+                        </button>
+                      </div>
                     ) : (
                       <div className="border border-border-subtle rounded-lg bg-bg-secondary overflow-x-auto shadow-sm">
                         <table className="w-full text-left border-collapse text-xs font-mono min-w-[1000px]">
@@ -1763,9 +2691,11 @@ export default function DashboardPage() {
                             <tr className="bg-bg-primary text-text-secondary border-b border-border-subtle text-[10px] uppercase font-bold tracking-wider">
                               <th className="p-3 border-r border-border-subtle min-w-[100px]">Date of Bill</th>
                               <th className="p-3 border-r border-border-subtle min-w-[110px]">Invoice No</th>
-                              <th className="p-3 border-r border-border-subtle min-w-[160px]">From (Party)</th>
-                              <th className="p-3 border-r border-border-subtle min-w-[125px]">Party GSTIN</th>
-                              <th className="p-3 border-r border-border-subtle text-right min-w-[105px]">Taxable Amt</th>
+                              <th className="p-3 border-r border-border-subtle min-w-[125px]">Seller GSTIN</th>
+                              <th className="p-3 border-r border-border-subtle min-w-[125px]">Buyer GSTIN</th>
+                              <th className="p-3 border-r border-border-subtle min-w-[150px]">Seller (From)</th>
+                              <th className="p-3 border-r border-border-subtle min-w-[150px]">Buyer (To)</th>
+                              <th className="p-3 border-r border-border-subtle text-right min-w-[130px]">Assessable Amount</th>
                               <th className="p-3 border-r border-border-subtle text-right min-w-[85px]">CGST</th>
                               <th className="p-3 border-r border-border-subtle text-right min-w-[85px]">SGST</th>
                               <th className="p-3 border-r border-border-subtle text-right min-w-[85px]">IGST</th>
@@ -1776,7 +2706,7 @@ export default function DashboardPage() {
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-border-subtle">
-                            {bills.map((bill) => {
+                            {getFilteredBillsForGrid().map((bill) => {
                               const rData = bill.raw_data || {};
                               const isFailed = bill.status === 'extraction_failed';
                               const isProcessing = bill.status === 'processing';
@@ -1798,9 +2728,11 @@ export default function DashboardPage() {
                                   {[
                                     { field: 'invoice_date', val: rData.invoice_date || '', align: 'left' },
                                     { field: 'invoice_number', val: rData.invoice_number || '', align: 'left' },
-                                    { field: 'party_name', val: rData.party_name || '', align: 'left' },
-                                    { field: 'party_gstin', val: rData.party_gstin || '', align: 'left' },
-                                    { field: 'taxable_amount', val: rData.taxable_amount !== undefined ? rData.taxable_amount : '', align: 'right' },
+                                    { field: 'gstin_from', val: rData.gstin_from || '', align: 'left' },
+                                    { field: 'gstin_to', val: rData.gstin_to || '', align: 'left' },
+                                    { field: 'party_name_from', val: rData.party_name_from || '', align: 'left' },
+                                    { field: 'party_name_to', val: rData.party_name_to || '', align: 'left' },
+                                    { field: 'assessable_amount', val: rData.assessable_amount !== undefined ? rData.assessable_amount : (rData.taxable_amount !== undefined ? rData.taxable_amount : ''), align: 'right' },
                                     { field: 'cgst', val: rData.cgst !== undefined ? rData.cgst : '', align: 'right' },
                                     { field: 'sgst', val: rData.sgst !== undefined ? rData.sgst : '', align: 'right' },
                                     { field: 'igst', val: rData.igst !== undefined ? rData.igst : '', align: 'right' },
@@ -1835,7 +2767,11 @@ export default function DashboardPage() {
                                           />
                                         ) : (
                                           <div className="flex items-center justify-between gap-1">
-                                            <span className="truncate">{cell.val}</span>
+                                            <span className="truncate">
+                                              {['assessable_amount', 'cgst', 'sgst', 'igst', 'total_amount'].includes(cell.field) 
+                                                ? formatCurrency(cell.val) 
+                                                : cell.val}
+                                            </span>
                                             {(!isProcessing && bill.status !== 'verified') && (
                                               <Edit2 className="w-2.5 h-2.5 text-text-secondary opacity-0 group-hover:opacity-100 transition-opacity" />
                                             )}
@@ -1848,10 +2784,10 @@ export default function DashboardPage() {
                                   {/* Bill Type Cell */}
                                   <td className="p-2 border-r border-border-subtle text-center">
                                     {bill.status === 'verified' ? (
-                                      <span className="capitalize">{rData.bill_type || 'purchase'}</span>
+                                      <span className="capitalize">{rData.bill_type || 'none'}</span>
                                     ) : (
                                       <select
-                                        value={rData.bill_type || 'purchase'}
+                                        value={rData.bill_type || 'none'}
                                         disabled={isProcessing}
                                         onChange={(e) => {
                                           setEditValue(e.target.value);
@@ -1861,6 +2797,7 @@ export default function DashboardPage() {
                                       >
                                         <option value="purchase">Purchase</option>
                                         <option value="sale">Sale</option>
+                                        <option value="none">None</option>
                                       </select>
                                     )}
                                   </td>
@@ -1870,7 +2807,7 @@ export default function DashboardPage() {
                                     <div className="flex items-center gap-1.5">
                                       {isProcessing && (
                                         <span className="inline-flex items-center gap-1 px-1.5 py-0.25 rounded bg-bg-primary border border-border-subtle text-text-secondary">
-                                          <Loader2 className="w-2.5 h-2.5 animate-spin" /> Process
+                                          <ThreeDotLoader size="sm" /> Process
                                         </span>
                                       )}
                                       {bill.status === 'needs_review' && (
@@ -1916,25 +2853,14 @@ export default function DashboardPage() {
                                     </button>
                                     
                                     {bill.status === 'needs_review' && (
-                                      <>
-                                        <button 
-                                          onClick={() => handleVerifyBill(bill.id)}
-                                          disabled={verifyingBillId === bill.id}
-                                          className="px-2 py-1 bg-accent text-accent-foreground rounded text-[10px] font-semibold hover:opacity-90 active:scale-95 transition-all disabled:opacity-50 flex items-center gap-1"
-                                        >
-                                          {verifyingBillId === bill.id ? (
-                                            <><Loader2 className="w-2.5 h-2.5 animate-spin" /> Verifying</>
-                                          ) : 'Verify'}
-                                        </button>
-                                        <button 
-                                          onClick={() => handleRetryExtraction(bill.id)}
-                                          disabled={retryingBillId === bill.id}
-                                          className="p-1 border border-border-subtle rounded hover:bg-bg-primary text-text-secondary disabled:opacity-50"
-                                          title="Retry AI Extraction"
-                                        >
-                                          <RefreshCw className={`w-3 h-3 ${retryingBillId === bill.id ? 'animate-spin' : ''}`} />
-                                        </button>
-                                      </>
+                                      <button 
+                                        onClick={() => handleRetryExtraction(bill.id)}
+                                        disabled={retryingBillId === bill.id}
+                                        className="p-1 border border-border-subtle rounded hover:bg-bg-primary text-text-secondary disabled:opacity-50"
+                                        title="Retry AI Extraction"
+                                      >
+                                        <RefreshCw className={`w-3 h-3 ${retryingBillId === bill.id ? 'animate-spin' : ''}`} />
+                                      </button>
                                     )}
                                     {isFailed && (
                                       <button 
@@ -1975,12 +2901,14 @@ export default function DashboardPage() {
                 <div className="flex flex-col items-center justify-center p-12 md:p-16 border border-dashed border-border-subtle rounded-lg bg-bg-secondary/10 text-center space-y-4">
                   <Building className="w-12 h-12 text-text-secondary opacity-50" />
                   <p className="font-mono text-sm text-text-secondary">No firm selected. Choose a client workspace from the header selector.</p>
+                  {!isReadOnly && (
                   <button
                     onClick={() => setIsModalOpen(true)}
                     className="px-4 py-2 bg-accent text-accent-foreground text-xs font-semibold rounded hover:opacity-90 transition-all flex items-center gap-2"
                   >
                     <Plus className="w-3.5 h-3.5" /> Add Client Firm
                   </button>
+                  )}
                 </div>
               )}
             </div>
@@ -2001,7 +2929,7 @@ export default function DashboardPage() {
 
                   {/* Search + Status Filter */}
                   <div className="flex flex-wrap gap-4 items-center bg-bg-secondary p-4 border border-border-subtle rounded-md text-xs font-mono">
-                    <div className="flex-1 min-w-[200px]">
+                    <div className="flex-1 min-w-[200px] relative">
                       <label className="block text-[10px] text-text-secondary uppercase font-bold mb-1">Search BE No / Shipper</label>
                       <input
                         type="text"
@@ -2010,6 +2938,31 @@ export default function DashboardPage() {
                         onChange={(e) => setTradeDocSearch(e.target.value)}
                         className="w-full bg-bg-primary border border-border-subtle rounded px-2.5 py-1.5 focus:outline-none focus:border-accent text-text-primary"
                       />
+                      {tradeDocSearch && (
+                        (() => {
+                          const query = tradeDocSearch.toLowerCase();
+                          const matchedDocs = tradeDocs.filter(d => 
+                            (d.be_number || '').toLowerCase().includes(query) ||
+                            (d.shipper_name || '').toLowerCase().includes(query)
+                          ).slice(0, 5);
+                          
+                          if (matchedDocs.length === 0) return null;
+                          return (
+                            <div className="absolute left-0 right-0 mt-1 bg-bg-secondary border border-border-subtle rounded-md shadow-lg z-50 text-left max-h-48 overflow-y-auto">
+                              {matchedDocs.map(doc => (
+                                <button
+                                  key={doc.id}
+                                  onClick={() => setTradeDocSearch(doc.be_number || '')}
+                                  className="w-full text-left p-2 hover:bg-bg-primary border-b border-border-subtle last:border-0 text-[11px] flex justify-between items-center"
+                                >
+                                  <span className="font-bold text-accent">{doc.be_number || 'N/A'}</span>
+                                  <span className="text-text-secondary truncate max-w-[140px]">{doc.shipper_name || 'N/A'}</span>
+                                </button>
+                              ))}
+                            </div>
+                          );
+                        })()
+                      )}
                     </div>
                     <div>
                       <label className="block text-[10px] text-text-secondary uppercase font-bold mb-1">Status</label>
@@ -2039,6 +2992,7 @@ export default function DashboardPage() {
                   </div>
 
                   {/* Upload Drop Zone */}
+                  {!isReadOnly ? (
                   <div
                     onDragOver={(e) => { e.preventDefault(); setIsDraggingTrade(true); }}
                     onDragLeave={() => setIsDraggingTrade(false)}
@@ -2070,6 +3024,12 @@ export default function DashboardPage() {
                       <p className="text-xs text-text-secondary">PDF, JPG, PNG · max 10 MB per file</p>
                     </div>
                   </div>
+                  ) : (
+                    <div className="border border-border-subtle rounded-lg p-4 bg-bg-secondary/40 text-xs text-text-secondary font-mono flex items-center gap-2">
+                      <Shield className="w-4 h-4 shrink-0" />
+                      Read-only view — uploads disabled for owners.
+                    </div>
+                  )}
 
                   {/* Upload progress */}
                   {(tradeDocUploadingFiles.length > 0 || tradeDocSummaryMsg) && (
@@ -2101,7 +3061,7 @@ export default function DashboardPage() {
                   {/* Review Grid */}
                   {isInitialTradeDocsLoad && isLoadingTradeDocs ? (
                     <div className="border border-dashed border-border-subtle rounded-lg p-12 flex flex-col items-center justify-center gap-3 text-text-secondary font-mono text-xs bg-bg-secondary/10">
-                      <Loader2 className="w-8 h-8 animate-spin text-text-primary" />
+                      <ThreeDotLoader size="lg" />
                       <p>Loading customs documents…</p>
                     </div>
                   ) : tradeDocs.length === 0 ? (
@@ -2125,6 +3085,7 @@ export default function DashboardPage() {
                             <th className="p-2.5 border-r border-border-subtle min-w-[160px]">Shipper</th>
                             <th className="p-2.5 border-r border-border-subtle min-w-[80px]">Port</th>
                             <th className="p-2.5 border-r border-border-subtle min-w-[120px]">Container ID</th>
+                            <th className="p-2.5 border-r border-border-subtle min-w-[150px]">E-Way Bills</th>
                             <th className="p-2.5 border-r border-border-subtle min-w-[90px]">Gross KG</th>
                             <th className="p-2.5 border-r border-border-subtle min-w-[90px]">Net KG</th>
                             <th className="p-2.5 border-r border-border-subtle min-w-[130px]">Assessable Value</th>
@@ -2167,9 +3128,9 @@ export default function DashboardPage() {
                                 } ${
                                   isFailed ? 'bg-red-500/5' : isProcessing ? 'opacity-60' : ''
                                 }`}>
-                                  {tradeCols.map((cell) => {
+                                  {tradeCols.flatMap((cell) => {
                                     const isCellEditing = editingTradeCell?.docId === doc.id && editingTradeCell?.field === cell.field;
-                                    return (
+                                    const cellEl = (
                                       <td
                                         key={cell.field}
                                         className="p-2 border-r border-border-subtle group cursor-text"
@@ -2196,16 +3157,35 @@ export default function DashboardPage() {
                                           <div className="flex items-center gap-1 min-h-[18px]">
                                             {isProcessing ? (
                                               <span className="text-text-secondary italic">extracting…</span>
+                                            ) : cell.field === 'container_id' ? (
+                                              <span className="truncate max-w-[200px] block" title={String(cell.val)}>
+                                                {String(cell.val) || <span className="opacity-30">N/A</span>}
+                                              </span>
                                             ) : (
                                               <span className="truncate max-w-[140px]" title={String(cell.val)}>{String(cell.val)}</span>
                                             )}
-                                            {!isProcessing && doc.status !== 'verified' && (
+                                            {!isProcessing && doc.status !== 'verified' && cell.field !== 'container_id' && (
                                               <Edit2 className="w-2.5 h-2.5 text-text-secondary opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
                                             )}
                                           </div>
                                         )}
                                       </td>
                                     );
+
+                                    if (cell.field === 'gross_weight') {
+                                      return [
+                                        <td key="eway_bills_linking" className="p-2 border-r border-border-subtle group relative cursor-default" onClick={(e) => e.stopPropagation()}>
+                                          <EwayBillLinkSelector
+                                            doc={doc}
+                                            ewayBills={ewayBills}
+                                            onLinkEway={handleLinkEwayBill}
+                                            onViewEway={setViewingEwayBill}
+                                          />
+                                        </td>,
+                                        cellEl
+                                      ];
+                                    }
+                                    return [cellEl];
                                   })}
 
                                   {/* Status Cell */}
@@ -2213,7 +3193,7 @@ export default function DashboardPage() {
                                     <div className="flex items-center gap-1">
                                       {isProcessing && (
                                         <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-bg-primary border border-border-subtle text-text-secondary text-[9px] font-bold">
-                                          <Loader2 className="w-2.5 h-2.5 animate-spin" /> Processing
+                                          <ThreeDotLoader size="sm" /> Processing
                                         </span>
                                       )}
                                       {doc.status === 'needs_review' && !isFailed && (
@@ -2261,7 +3241,7 @@ export default function DashboardPage() {
                                         className="px-2 py-1 bg-accent text-accent-foreground rounded text-[10px] font-bold hover:opacity-90 active:scale-95 transition-all disabled:opacity-50 flex items-center gap-1"
                                       >
                                         {verifyingTradeDocId === doc.id ? (
-                                          <><Loader2 className="w-2.5 h-2.5 animate-spin" /> Verifying</>
+                                          <><ThreeDotLoader size="sm" /> Verifying</>
                                         ) : 'Verify'}
                                       </button>
                                     )}
@@ -2297,12 +3277,14 @@ export default function DashboardPage() {
                 <div className="flex flex-col items-center justify-center p-12 md:p-16 border border-dashed border-border-subtle rounded-lg bg-bg-secondary/10 text-center space-y-4">
                   <Building className="w-12 h-12 text-text-secondary opacity-50" />
                   <p className="font-mono text-sm text-text-secondary">No firm selected. Choose a client workspace from the header selector.</p>
+                  {!isReadOnly && (
                   <button
                     onClick={() => setIsModalOpen(true)}
                     className="px-4 py-2 bg-accent text-accent-foreground text-xs font-semibold rounded hover:opacity-90 transition-all flex items-center gap-2"
                   >
                     <Plus className="w-3.5 h-3.5" /> Add Client Firm
                   </button>
+                  )}
                 </div>
               )}
             </div>
@@ -2311,42 +3293,381 @@ export default function DashboardPage() {
           {/* TAB 4: E-WAY BILLS */}
           {activeTab === 'e-way-bills' && (
             <div className="space-y-6">
-              <div>
-                <h1 className="text-3xl font-extrabold tracking-tight">E-way Bills</h1>
-                <p className="text-sm text-text-secondary mt-1">Generate vehicle transit permits, calculate PIN-code distances, and verify transporter logs.</p>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div>
+                  <h1 className="text-3xl font-extrabold tracking-tight">E-way Bills</h1>
+                  <p className="text-sm text-text-secondary mt-1">Upload E-way bills bulk, extract BE number & E-way bill number, and verify records.</p>
+                </div>
               </div>
 
-              <div className="border border-dashed border-border-subtle rounded-lg p-16 text-center bg-bg-secondary/10 flex flex-col items-center justify-center gap-6">
-                <div className="w-12 h-12 rounded-full border border-border-subtle flex items-center justify-center bg-bg-primary text-text-secondary">
-                  <Truck className="w-5 h-5" />
-                </div>
-                
-                <div className="space-y-2 max-w-sm mx-auto">
-                  <h3 className="text-lg font-bold">No transit bills generated</h3>
-                  <p className="text-xs text-text-secondary font-mono leading-relaxed">
-                    Verify compliance of active physical cargo transportation. Links automatically to GSTIN profiles.
-                  </p>
-                </div>
+              {selectedFirm ? (
+                <div className="space-y-8">
+                  {/* Search + Status Filter */}
+                  <div className="flex flex-wrap gap-4 items-center bg-bg-secondary p-4 border border-border-subtle rounded-md text-xs font-mono">
+                    <div className="flex-1 min-w-[200px] relative">
+                      <label className="block text-[10px] text-text-secondary uppercase font-bold mb-1">Search E-Way Bill No / BE No</label>
+                      <input
+                        type="text"
+                        placeholder="Search..."
+                        value={ewayBillSearch}
+                        onChange={(e) => setEwayBillSearch(e.target.value)}
+                        className="w-full bg-bg-primary border border-border-subtle rounded px-2.5 py-1.5 focus:outline-none focus:border-accent text-text-primary"
+                      />
+                      {ewayBillSearch && (
+                        (() => {
+                          const query = ewayBillSearch.toLowerCase();
+                          const matchedBills = ewayBills.filter(b =>
+                            !b.is_deleted && (
+                              (b.be_number || '').toLowerCase().includes(query) ||
+                              (b.eway_bill_number || '').toLowerCase().includes(query)
+                            )
+                          ).slice(0, 5);
+                          
+                          if (matchedBills.length === 0) return null;
+                          return (
+                            <div className="absolute left-0 right-0 mt-1 bg-bg-secondary border border-border-subtle rounded-md shadow-lg z-50 text-left max-h-48 overflow-y-auto">
+                              {matchedBills.map(bill => (
+                                <button
+                                  key={bill.id}
+                                  onClick={() => setEwayBillSearch(bill.be_number || '')}
+                                  className="w-full text-left p-2 hover:bg-bg-primary border-b border-border-subtle last:border-0 text-[11px] flex justify-between items-center"
+                                >
+                                  <span className="font-bold text-accent">BE: {bill.be_number || 'N/A'}</span>
+                                  <span className="text-text-secondary font-mono text-[10px]">{formatEwayBillNumber(bill.eway_bill_number)}</span>
+                                </button>
+                              ))}
+                            </div>
+                          );
+                        })()
+                      )}
+                    </div>
+                    <div>
+                      <label className="block text-[10px] text-text-secondary uppercase font-bold mb-1">Status</label>
+                      <select
+                        value={ewayBillStatusFilter}
+                        onChange={(e) => setEwayBillStatusFilter(e.target.value)}
+                        className="bg-bg-primary border border-border-subtle rounded px-2.5 py-1.5 focus:outline-none focus:border-accent text-text-primary cursor-pointer"
+                      >
+                        <option value="">All Statuses</option>
+                        <option value="processing">Processing</option>
+                        <option value="needs_review">Needs Review</option>
+                        <option value="verified">Verified</option>
+                        <option value="extraction_failed">Failed</option>
+                      </select>
+                    </div>
+                    <div className="ml-auto">
+                      <label className="block text-[10px] text-text-secondary uppercase font-bold mb-1">&nbsp;</label>
+                      <button
+                        onClick={() => fetchEwayBills({ manual: true })}
+                        disabled={isRefreshingEwayBills}
+                        className="px-3 py-1.5 border border-border-subtle rounded hover:bg-bg-primary transition-colors flex items-center gap-1.5 disabled:opacity-50"
+                      >
+                        <RefreshCw className={`w-3 h-3 ${isRefreshingEwayBills ? 'animate-spin' : ''}`} />
+                        {isRefreshingEwayBills ? 'Refreshing…' : 'Refresh'}
+                      </button>
+                    </div>
+                  </div>
 
-                <input 
-                  type="file" 
-                  ref={ewayBillsInputRef} 
-                  onChange={(e) => handleStubFileUpload(e, 'eway_bills')} 
-                  className="hidden" 
-                  accept=".pdf,.jpg,.jpeg,.png,.xlsx"
-                />
-                <button 
-                  onClick={() => ewayBillsInputRef.current?.click()}
-                  disabled={isStubUploading}
-                  className="px-6 py-2.5 bg-accent text-accent-foreground font-semibold rounded text-sm hover:opacity-90 active:scale-95 transition-all flex items-center gap-2 disabled:opacity-50"
-                >
-                  {isStubUploading ? (
-                    <><Loader2 className="w-4 h-4 animate-spin" /> Uploading…</>
+                  {/* Upload Drop Zone */}
+                  {!isReadOnly ? (
+                  <div
+                    onDragOver={(e) => { e.preventDefault(); setIsDraggingEway(true); }}
+                    onDragLeave={() => setIsDraggingEway(false)}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      setIsDraggingEway(false);
+                      if (e.dataTransfer.files) handleEwayBillFilesSelected(e.dataTransfer.files);
+                    }}
+                    onClick={() => ewayBillsInputRef.current?.click()}
+                    className={`border-2 border-dashed rounded-lg p-10 flex flex-col items-center justify-center gap-4 cursor-pointer transition-all ${
+                      isDraggingEway
+                        ? 'border-accent bg-accent/5 scale-[1.01]'
+                        : 'border-border-subtle hover:border-text-primary/40 bg-bg-secondary/10'
+                    }`}
+                  >
+                    <input
+                      type="file"
+                      ref={ewayBillsInputRef}
+                      multiple
+                      accept=".pdf,.jpg,.jpeg,.png"
+                      onChange={(e) => { if (e.target.files) handleEwayBillFilesSelected(e.target.files); }}
+                      className="hidden"
+                    />
+                    <div className="w-12 h-12 rounded-full border border-border-subtle flex items-center justify-center bg-bg-primary text-text-secondary">
+                      <Upload className="w-5 h-5" />
+                    </div>
+                    <div className="space-y-1 text-center">
+                      <p className="font-mono text-sm font-semibold">Drag & drop E-way bills or click to browse</p>
+                      <p className="text-xs text-text-secondary">PDF, JPG, PNG · max 10 MB per file</p>
+                    </div>
+                  </div>
                   ) : (
-                    <><Plus className="w-4 h-4" /> Generate E-Way Bill</>
+                    <div className="border border-border-subtle rounded-lg p-4 bg-bg-secondary/40 text-xs text-text-secondary font-mono flex items-center gap-2">
+                      <Shield className="w-4 h-4 shrink-0" />
+                      Read-only view — uploads disabled for owners.
+                    </div>
                   )}
-                </button>
-              </div>
+
+                  {/* Upload progress */}
+                  {(ewayBillUploadingFiles.length > 0 || ewayBillSummaryMsg) && (
+                    <div className="border border-border-subtle rounded-lg bg-bg-secondary p-5 space-y-4">
+                      {ewayBillSummaryMsg && (
+                        <div className="text-xs font-mono text-text-primary font-bold flex items-center gap-2">
+                          <CheckCircle2 className="w-4 h-4 text-green-500" /> {ewayBillSummaryMsg}
+                        </div>
+                      )}
+                      {ewayBillUploadingFiles.length > 0 && (
+                        <div className="space-y-3">
+                          <h4 className="text-[10px] font-mono text-text-secondary uppercase tracking-wider font-bold">Uploading files...</h4>
+                          {ewayBillUploadingFiles.map((file: any) => (
+                            <div key={file.id} className="text-xs font-mono space-y-1">
+                              <div className="flex justify-between text-text-secondary">
+                                <span className="truncate max-w-xs">{file.name}</span>
+                                <span>{file.progress}%</span>
+                              </div>
+                              <div className="w-full bg-bg-primary h-1.5 rounded overflow-hidden">
+                                <div className="bg-accent h-1.5 transition-all duration-150" style={{ width: `${file.progress}%` }} />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Table Grid */}
+                  {isLoadingEwayBills ? (
+                    <div className="border border-dashed border-border-subtle rounded-lg p-12 flex flex-col items-center justify-center gap-3 text-text-secondary font-mono text-xs bg-bg-secondary/10">
+                      <ThreeDotLoader size="lg" />
+                      <p>Loading E-way bills…</p>
+                    </div>
+                  ) : ewayBills.length === 0 ? (
+                    <div className="border border-dashed border-border-subtle rounded-lg p-12 text-center text-text-secondary bg-bg-secondary/10 flex flex-col items-center justify-center gap-4 font-mono text-xs">
+                      <Truck className="w-10 h-10 opacity-40" />
+                      <p>No E-way bills uploaded yet.</p>
+                      <button
+                        onClick={() => ewayBillsInputRef.current?.click()}
+                        className="px-4 py-2 bg-accent text-accent-foreground text-xs font-semibold rounded hover:opacity-90 transition-all flex items-center gap-2"
+                      >
+                        <Upload className="w-3.5 h-3.5" /> Upload E-way bills
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="border border-border-subtle rounded-lg bg-bg-secondary overflow-x-auto shadow-sm">
+                      <table className="w-full text-left border-collapse text-xs font-mono min-w-[900px]">
+                        <thead>
+                          <tr className="bg-bg-primary text-text-secondary border-b border-border-subtle text-[10px] uppercase font-bold tracking-wider">
+                            <th className="p-2.5 border-r border-border-subtle min-w-[200px]">BE No</th>
+                            <th className="p-2.5 border-r border-border-subtle min-w-[150px]">E-Way Bill No</th>
+                            <th className="p-2.5 border-r border-border-subtle min-w-[120px]">Vehicle No</th>
+                            <th className="p-2.5 border-r border-border-subtle min-w-[120px]">Uploaded At</th>
+                            <th className="p-2.5 border-r border-border-subtle min-w-[80px]">Status</th>
+                            <th className="p-2.5 text-center min-w-[200px]">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {ewayBills
+                            .filter((bill: any) => {
+                              if (ewayBillStatusFilter && bill.status !== ewayBillStatusFilter) return false;
+                              if (ewayBillSearch) {
+                                const q = ewayBillSearch.toLowerCase();
+                                return (
+                                  (bill.eway_bill_number || '').toLowerCase().includes(q) ||
+                                  (bill.be_number || '').toLowerCase().includes(q) ||
+                                  (bill.file_name || '').toLowerCase().includes(q)
+                                );
+                              }
+                              return true;
+                            })
+                            .map((bill: any) => {
+                              const isProcessing = bill.status === 'processing';
+                              const isFailed = bill.extraction_failed || bill.status === 'extraction_failed';
+                              const rData = bill.raw_data || {};
+
+                              const ewayCols = [
+                                { field: 'eway_bill_number', val: bill.eway_bill_number || rData.eway_bill_number || '' },
+                                { field: 'vehicle_number', val: bill.vehicle_number || rData.vehicle_number || '' },
+                              ];
+
+                              return (
+                                <tr key={bill.id} className={`border-b border-border-subtle hover:bg-bg-primary/20 transition-colors ${
+                                  savingEwayBillId === bill.id ? 'opacity-60' : ''
+                                } ${
+                                  isFailed ? 'bg-red-500/5' : isProcessing ? 'opacity-60' : ''
+                                }`}>
+                                  {/* BE No Cell (First Column) */}
+                                  <td
+                                    className="p-2 border-r border-border-subtle group cursor-text font-bold"
+                                    onClick={() => {
+                                      if (isProcessing || bill.status === 'verified') return;
+                                      setEditingEwayCell({ billId: bill.id, field: 'be_number' });
+                                      setEditEwayValue(String(bill.be_number || rData.be_number || ''));
+                                    }}
+                                    title={bill.file_name}
+                                  >
+                                    {editingEwayCell?.billId === bill.id && editingEwayCell?.field === 'be_number' ? (
+                                      <input
+                                        autoFocus
+                                        type="text"
+                                        value={editEwayValue}
+                                        onChange={(e) => setEditEwayValue(e.target.value)}
+                                        onBlur={() => handleEwayCellSave(bill.id, 'be_number')}
+                                        onKeyDown={(e) => {
+                                          if (e.key === 'Enter' || e.key === 'Tab') handleEwayCellSave(bill.id, 'be_number');
+                                          if (e.key === 'Escape') setEditingEwayCell(null);
+                                        }}
+                                        className="w-full bg-bg-primary border border-accent rounded px-1.5 py-0.5 focus:outline-none text-text-primary text-xs"
+                                      />
+                                    ) : (
+                                      <div className="flex items-center gap-1 min-h-[18px]">
+                                        {isProcessing ? (
+                                          <span className="text-text-secondary italic">extracting…</span>
+                                        ) : (
+                                          <span className="truncate max-w-[180px]">
+                                            {bill.be_number || rData.be_number || <span className="opacity-30 font-normal">N/A</span>}
+                                          </span>
+                                        )}
+                                        {!isProcessing && bill.status !== 'verified' && (
+                                          <Edit2 className="w-2.5 h-2.5 text-text-secondary opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+                                        )}
+                                      </div>
+                                    )}
+                                  </td>
+
+                                  {/* Editable Cells */}
+                                  {ewayCols.map((cell) => {
+                                    const isCellEditing = editingEwayCell?.billId === bill.id && editingEwayCell?.field === cell.field;
+                                    return (
+                                      <td
+                                        key={cell.field}
+                                        className="p-2 border-r border-border-subtle group cursor-text"
+                                        onClick={() => {
+                                          if (isProcessing || bill.status === 'verified') return;
+                                          setEditingEwayCell({ billId: bill.id, field: cell.field });
+                                          setEditEwayValue(String(cell.val));
+                                        }}
+                                      >
+                                        {isCellEditing ? (
+                                          <input
+                                            autoFocus
+                                            type="text"
+                                            value={editEwayValue}
+                                            onChange={(e) => setEditEwayValue(e.target.value)}
+                                            onBlur={() => handleEwayCellSave(bill.id, cell.field)}
+                                            onKeyDown={(e) => {
+                                              if (e.key === 'Enter' || e.key === 'Tab') handleEwayCellSave(bill.id, cell.field);
+                                              if (e.key === 'Escape') setEditingEwayCell(null);
+                                            }}
+                                            className="w-full bg-bg-primary border border-accent rounded px-1.5 py-0.5 focus:outline-none text-text-primary text-xs"
+                                          />
+                                        ) : (
+                                          <div className="flex items-center gap-1 min-h-[18px]">
+                                            {isProcessing ? (
+                                              <span className="text-text-secondary italic">extracting…</span>
+                                            ) : (
+                                              <span className="truncate max-w-[140px]" title={String(cell.val)}>
+                                                {cell.field === 'eway_bill_number'
+                                                  ? formatEwayBillNumber(String(cell.val))
+                                                  : String(cell.val) || <span className="opacity-30">N/A</span>}
+                                              </span>
+                                            )}
+                                            {!isProcessing && bill.status !== 'verified' && (
+                                              <Edit2 className="w-2.5 h-2.5 text-text-secondary opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+                                            )}
+                                          </div>
+                                        )}
+                                      </td>
+                                    );
+                                  })}
+
+                                  {/* Uploaded At Cell */}
+                                  <td className="p-2 border-r border-border-subtle text-text-secondary">
+                                    {new Date(bill.uploaded_at).toLocaleString()}
+                                  </td>
+
+                                  {/* Status Cell */}
+                                  <td className="p-2 border-r border-border-subtle">
+                                    <div className="flex items-center gap-1">
+                                      {isProcessing && (
+                                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-bg-primary border border-border-subtle text-text-secondary text-[9px] font-bold">
+                                          <ThreeDotLoader size="sm" /> Processing
+                                        </span>
+                                      )}
+                                      {bill.status === 'needs_review' && (
+                                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-yellow-500/10 border border-yellow-500/20 text-yellow-600 dark:text-yellow-400 text-[9px] font-bold">
+                                          <Clock className="w-2.5 h-2.5" /> Needs Review
+                                        </span>
+                                      )}
+                                      {bill.status === 'verified' && (
+                                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-green-500/10 border border-green-500/20 text-green-600 dark:text-green-400 text-[9px] font-bold">
+                                          <CheckCircle2 className="w-2.5 h-2.5" /> Verified
+                                        </span>
+                                      )}
+                                      {isFailed && (
+                                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 text-[9px] font-bold">
+                                          <AlertCircle className="w-2.5 h-2.5" /> Failed
+                                        </span>
+                                      )}
+                                    </div>
+                                  </td>
+
+                                  {/* Actions Cell */}
+                                  <td className="p-2 flex items-center justify-center gap-1.5">
+                                    {bill.status === 'needs_review' && (
+                                      <button
+                                        onClick={() => handleVerifyEwayBill(bill.id)}
+                                        className="px-2 py-1 bg-accent text-accent-foreground rounded text-[10px] font-bold hover:opacity-90 active:scale-95 transition-all flex items-center gap-1"
+                                      >
+                                        Verify
+                                      </button>
+                                    )}
+
+                                    {isFailed && (
+                                      <button
+                                        onClick={() => handleRetryEwayExtraction(bill.id)}
+                                        className="px-2 py-1 border border-border-subtle rounded text-[10px] font-semibold hover:bg-bg-primary transition-all active:scale-95 flex items-center gap-1"
+                                      >
+                                        <RefreshCw className="w-2.5 h-2.5" />
+                                        Retry
+                                      </button>
+                                    )}
+
+                                    <button
+                                      onClick={() => setViewingEwayBill(bill)}
+                                      className="px-2 py-1 border border-border-subtle rounded text-[10px] font-semibold hover:bg-bg-primary transition-all active:scale-95 flex items-center gap-1 text-text-primary bg-bg-primary/50"
+                                    >
+                                      <Eye className="w-2.5 h-2.5" /> View
+                                    </button>
+
+                                    <button
+                                      onClick={() => setDeletingEwayBillId(bill.id)}
+                                      className="px-2 py-1 text-red-500 hover:text-red-600 rounded text-[10px] font-semibold transition-all active:scale-95"
+                                    >
+                                      Delete
+                                    </button>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center p-12 md:p-16 border border-dashed border-border-subtle rounded-lg bg-bg-secondary/10 text-center space-y-4">
+                  <Building className="w-12 h-12 text-text-secondary opacity-50" />
+                  <p className="font-mono text-sm text-text-secondary">No firm selected. Choose a client workspace from the header selector.</p>
+                  {!isReadOnly && (
+                  <button
+                    onClick={() => setIsModalOpen(true)}
+                    className="px-4 py-2 bg-accent text-accent-foreground text-xs font-semibold rounded hover:opacity-90 transition-all flex items-center gap-2"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Add Client Firm
+                  </button>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -2410,7 +3731,7 @@ export default function DashboardPage() {
 
               {isLoadingVault ? (
                 <div className="flex flex-col items-center justify-center py-20 gap-3 font-mono text-xs text-text-secondary">
-                  <Loader2 className="w-8 h-8 animate-spin text-text-primary" />
+                  <ThreeDotLoader size="lg" />
                   <p>Loading Vault Archive...</p>
                 </div>
               ) : (
@@ -2628,64 +3949,224 @@ export default function DashboardPage() {
             <div className="space-y-6">
               <div>
                 <h1 className="text-3xl font-extrabold tracking-tight">Settings</h1>
-                <p className="text-sm text-text-secondary mt-1">Configure accountant profile credentials and developer API channels.</p>
+                <p className="text-sm text-text-secondary mt-1">Manage your professional profile and client firm settings.</p>
               </div>
 
-              <div className="border border-border-subtle rounded-lg bg-bg-secondary p-6">
-                <form onSubmit={handleSaveSettings} className="space-y-6 max-w-md">
-                  
-                  {saveSuccess && (
-                    <div className="p-3 bg-bg-primary border border-border-subtle text-xs font-mono rounded flex items-center gap-2 text-text-primary">
-                      <UserCheck className="w-4 h-4 text-green-500" /> Settings updated successfully.
+              <div className="grid lg:grid-cols-2 gap-6">
+                {/* Profile Form */}
+                <div className="border border-border-subtle rounded-xl bg-bg-secondary p-6 space-y-6">
+                  <div className="flex items-center gap-4 pb-4 border-b border-border-subtle">
+                    <div className="relative group cursor-pointer w-16 h-16 rounded-full overflow-hidden border border-border-subtle flex items-center justify-center bg-neutral-950 dark:bg-neutral-50 text-neutral-50 dark:text-neutral-950 text-xl font-bold shrink-0">
+                      {user?.avatar && user.avatar.startsWith('data:') ? (
+                        <img src={user.avatar} alt="Profile photo" className="w-full h-full object-cover" />
+                      ) : (
+                        <span>{getInitials(user?.name || '')}</span>
+                      )}
+                      <label className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-[10px] text-white font-semibold transition-opacity cursor-pointer">
+                        Upload
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              const reader = new FileReader();
+                              reader.onloadend = () => {
+                                updateUser({ avatar: reader.result as string });
+                                triggerToast("Profile photo updated successfully!");
+                              };
+                              reader.readAsDataURL(file);
+                            }
+                          }}
+                        />
+                      </label>
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-text-primary">Profile Photo</h3>
+                      <p className="text-xs text-text-secondary">Click photo to upload a new avatar. JPG, PNG or WebP.</p>
+                    </div>
+                  </div>
+
+                  <form onSubmit={handleSaveSettings} className="space-y-4">
+                    {saveSuccess && (
+                      <div className="p-3 bg-bg-primary border border-border-subtle text-xs font-mono rounded flex items-center gap-2 text-text-primary">
+                        <UserCheck className="w-4 h-4 text-green-500" /> Profile settings saved.
+                      </div>
+                    )}
+
+                    <div className="grid sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs text-text-secondary mb-1">Full Name</label>
+                        <input
+                          type="text"
+                          value={accountantName}
+                          onChange={(e) => setAccountantName(e.target.value)}
+                          placeholder="Full Name"
+                          className="w-full px-3 py-2 bg-bg-primary border border-border-subtle rounded-lg text-sm text-text-primary focus:outline-none focus:border-accent"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-text-secondary mb-1">Email Address</label>
+                        <input
+                          type="email"
+                          value={user?.email || ''}
+                          disabled
+                          className="w-full px-3 py-2 bg-bg-primary/50 border border-border-subtle rounded-lg text-sm text-text-secondary focus:outline-none cursor-not-allowed"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs text-text-secondary mb-1">Phone Number</label>
+                        <input
+                          type="text"
+                          value={profilePhone}
+                          onChange={(e) => setProfilePhone(e.target.value)}
+                          placeholder="Phone Number"
+                          className="w-full px-3 py-2 bg-bg-primary border border-border-subtle rounded-lg text-sm text-text-primary focus:outline-none focus:border-accent"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-text-secondary mb-1">PAN Number</label>
+                        <input
+                          type="text"
+                          value={profilePan}
+                          onChange={(e) => setProfilePan(e.target.value.toUpperCase())}
+                          placeholder="PAN Number"
+                          className="w-full px-3 py-2 bg-bg-primary border border-border-subtle rounded-lg text-sm text-text-primary focus:outline-none focus:border-accent"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs text-text-secondary mb-1">Role</label>
+                        <select
+                          value={profileRole}
+                          onChange={(e) => setProfileRole(e.target.value)}
+                          className="w-full px-3 py-2 bg-bg-primary border border-border-subtle rounded-lg text-sm text-text-primary focus:outline-none focus:border-accent cursor-pointer"
+                        >
+                          <option value="accountant">Accountant</option>
+                          <option value="owner">Business Owner</option>
+                          <option value="auditor">Auditor</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs text-text-secondary mb-1">Location</label>
+                        <input
+                          type="text"
+                          value={profileLocation}
+                          onChange={(e) => setProfileLocation(e.target.value)}
+                          placeholder="Location (e.g. Mumbai, India)"
+                          className="w-full px-3 py-2 bg-bg-primary border border-border-subtle rounded-lg text-sm text-text-primary focus:outline-none focus:border-accent"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="pt-4 border-t border-border-subtle">
+                      <button
+                        type="submit"
+                        className="px-5 py-2 bg-accent text-accent-foreground font-semibold rounded-lg text-xs hover:opacity-90 active:scale-95 transition-all shadow-sm"
+                      >
+                        Save Profile
+                      </button>
+                    </div>
+                  </form>
+                </div>
+
+                {/* Firm Settings */}
+                <div className="border border-border-subtle rounded-xl bg-bg-secondary p-6 space-y-6">
+                  {selectedFirm ? (
+                    <>
+                      <div className="flex items-center gap-4 pb-4 border-b border-border-subtle">
+                        <div className="relative group cursor-pointer w-16 h-16 rounded-xl overflow-hidden border border-border-subtle flex items-center justify-center bg-bg-primary text-text-secondary text-2xl font-bold shrink-0">
+                          {firmLogo ? (
+                            <img src={firmLogo} alt="Firm logo" className="w-full h-full object-contain p-1" />
+                          ) : (
+                            <Building2 className="w-8 h-8 text-text-secondary" />
+                          )}
+                          <label className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-[10px] text-white font-semibold transition-opacity cursor-pointer">
+                            Upload
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                  const reader = new FileReader();
+                                  reader.onloadend = () => {
+                                    const logoBase64 = reader.result as string;
+                                    setFirmLogo(logoBase64);
+                                    localStorage.setItem(`firm_logo_${selectedFirm.id}`, logoBase64);
+                                    window.dispatchEvent(new Event('storage'));
+                                    triggerToast("Firm logo updated successfully!");
+                                  };
+                                  reader.readAsDataURL(file);
+                                }
+                              }}
+                            />
+                          </label>
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-bold text-text-primary">Firm Logo</h3>
+                          <p className="text-xs text-text-secondary">Set logo for {selectedFirm.name}. JPG, PNG or SVG.</p>
+                        </div>
+                      </div>
+
+                      <div className="space-y-4">
+                        <div className="grid sm:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-xs text-text-secondary mb-1">Firm Name</label>
+                            <input
+                              type="text"
+                              value={selectedFirm.name}
+                              disabled
+                              className="w-full px-3 py-2 bg-bg-primary/50 border border-border-subtle rounded-lg text-sm text-text-secondary focus:outline-none cursor-not-allowed"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs text-text-secondary mb-1">GSTIN</label>
+                            <input
+                              type="text"
+                              value={selectedFirm.gstin || 'N/A'}
+                              disabled
+                              className="w-full px-3 py-2 bg-bg-primary/50 border border-border-subtle rounded-lg text-sm text-text-secondary focus:outline-none cursor-not-allowed"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid sm:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-xs text-text-secondary mb-1">State</label>
+                            <input
+                              type="text"
+                              value={selectedFirm.state}
+                              disabled
+                              className="w-full px-3 py-2 bg-bg-primary/50 border border-border-subtle rounded-lg text-sm text-text-secondary focus:outline-none cursor-not-allowed"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs text-text-secondary mb-1">City</label>
+                            <input
+                              type="text"
+                              value={selectedFirm.city}
+                              disabled
+                              className="w-full px-3 py-2 bg-bg-primary/50 border border-border-subtle rounded-lg text-sm text-text-secondary focus:outline-none cursor-not-allowed"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="h-full flex flex-col items-center justify-center text-center p-6 text-text-secondary">
+                      <Building2 className="w-10 h-10 mb-2 opacity-40" />
+                      <p className="text-xs">No client firm selected. Choose a firm from the workspace selector in the header to configure logo.</p>
                     </div>
                   )}
-
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-xs font-mono text-text-secondary mb-1">Accountant Full Name</label>
-                      <input
-                        type="text"
-                        value={accountantName}
-                        onChange={(e) => setAccountantName(e.target.value)}
-                        placeholder="e.g. Accountant Partner"
-                        className="w-full px-3 py-2 bg-bg-primary border border-border-subtle rounded text-sm focus:outline-none focus:border-accent text-text-primary"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-mono text-text-secondary mb-1">Gemini Pro API Key (Override)</label>
-                      <input
-                        type="password"
-                        value={geminiKey}
-                        onChange={(e) => setGeminiKey(e.target.value)}
-                        placeholder="••••••••••••••••••••••••"
-                        className="w-full px-3 py-2 bg-bg-primary border border-border-subtle rounded text-sm focus:outline-none focus:border-accent text-text-primary font-mono"
-                      />
-                      <span className="text-[10px] text-text-secondary font-mono mt-1 block">
-                        If provided, overrides system-level Gemini API settings.
-                      </span>
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-mono text-text-secondary mb-1">Active Email Address</label>
-                      <input
-                        type="email"
-                        value={user?.email || ''}
-                        disabled
-                        className="w-full px-3 py-2 bg-bg-primary/50 border border-border-subtle rounded text-sm text-text-secondary focus:outline-none font-mono"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="pt-4 border-t border-border-subtle">
-                    <button
-                      type="submit"
-                      className="px-6 py-2.5 bg-accent text-accent-foreground font-semibold rounded text-sm hover:opacity-90 active:scale-95 transition-all"
-                    >
-                      Save Configurations
-                    </button>
-                  </div>
-                </form>
+                </div>
               </div>
             </div>
           )}
@@ -2746,9 +4227,12 @@ export default function DashboardPage() {
                   {[
                     { label: 'Invoice Number', field: 'invoice_number' },
                     { label: 'Invoice Date (YYYY-MM-DD)', field: 'invoice_date' },
-                    { label: 'Party Name', field: 'party_name' },
-                    { label: 'Party GSTIN', field: 'party_gstin' },
+                    { label: 'Party Name From (Seller)', field: 'party_name_from' },
+                    { label: 'Party GSTIN From (Seller)', field: 'gstin_from' },
+                    { label: 'Party Name To (Buyer)', field: 'party_name_to' },
+                    { label: 'Party GSTIN To (Buyer)', field: 'gstin_to' },
                     { label: 'Place of Supply', field: 'place_of_supply' },
+                    { label: 'Assessable Amount (₹)', field: 'assessable_amount', type: 'number' },
                     { label: 'Taxable Amount (₹)', field: 'taxable_amount', type: 'number' },
                     { label: 'CGST (₹)', field: 'cgst', type: 'number' },
                     { label: 'SGST (₹)', field: 'sgst', type: 'number' },
@@ -2810,7 +4294,7 @@ export default function DashboardPage() {
                   <div className="space-y-1">
                     <label className="text-[10px] text-text-secondary uppercase font-bold">Bill Type</label>
                     <select
-                      value={viewingBill.raw_data?.bill_type || 'purchase'}
+                      value={viewingBill.raw_data?.bill_type || 'none'}
                       disabled={viewingBill.status === 'verified'}
                       onChange={async (e) => {
                         setEditValue(e.target.value);
@@ -2824,6 +4308,7 @@ export default function DashboardPage() {
                     >
                       <option value="purchase">Purchase</option>
                       <option value="sale">Sale</option>
+                      <option value="none">None</option>
                     </select>
                   </div>
                 </div>
@@ -2850,20 +4335,7 @@ export default function DashboardPage() {
                   </div>
                   
                   <div className="flex gap-2">
-                    {viewingBill.status === 'needs_review' && (
-                      <button 
-                        onClick={async () => {
-                          await handleVerifyBill(viewingBill.id);
-                          setViewingBill((prev: any) => ({ ...prev, status: 'verified' }));
-                        }}
-                        disabled={verifyingBillId === viewingBill.id}
-                        className="px-4 py-2 bg-accent text-accent-foreground font-semibold rounded hover:opacity-90 active:scale-95 transition-all disabled:opacity-50 flex items-center gap-1.5"
-                      >
-                        {verifyingBillId === viewingBill.id ? (
-                          <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Verifying…</>
-                        ) : 'Verify Invoice'}
-                      </button>
-                    )}
+                    
                     {viewingBill.status === 'extraction_failed' && (
                       <button 
                         onClick={async () => {
@@ -2913,7 +4385,7 @@ export default function DashboardPage() {
                 disabled={isDeletingBill}
                 className="px-3.5 py-2 bg-red-600 text-white font-semibold rounded hover:opacity-90 active:scale-95 transition-all disabled:opacity-50 flex items-center gap-1.5"
               >
-                {isDeletingBill ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Deleting…</> : 'Delete Invoice'}
+                {isDeletingBill ? <><ThreeDotLoader size="md" /> Deleting…</> : 'Delete Invoice'}
               </button>
             </div>
           </div>
@@ -2952,10 +4424,10 @@ export default function DashboardPage() {
       )}
 
       {/* Excel Export Loading Spinner */}
-      {isExporting && (
+      {isExporting && !exportBatch && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-6 animate-in fade-in duration-200">
           <div className="bg-bg-primary border border-border-subtle rounded-lg w-full max-w-xs p-6 shadow-2xl space-y-4 font-mono text-xs text-text-primary text-center">
-            <Loader2 className="w-8 h-8 animate-spin mx-auto text-text-primary" />
+            <ThreeDotLoader size="lg" className="mx-auto" />
             <p className="font-semibold">Generating Excel Ledger...</p>
             <p className="text-[10px] text-text-secondary">Structuring cells, calculating totals, and compiling sheets.</p>
           </div>
@@ -3006,7 +4478,7 @@ export default function DashboardPage() {
           <div className="bg-bg-secondary border border-border-subtle rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col text-text-primary">
             <div className="flex items-center justify-between p-5 border-b border-border-subtle">
               <div>
-                <h3 className="font-bold text-lg">Trade Document — {viewingTradeDoc.file_name}</h3>
+                <h3 className="font-bold text-lg">Trade Document | {viewingTradeDoc.file_name}</h3>
                 <p className="text-xs font-mono text-text-secondary">Bill of Entry / Shipping Bill · status: {viewingTradeDoc.status}</p>
               </div>
               <button onClick={() => setViewingTradeDoc(null)} className="p-2 rounded hover:bg-bg-primary transition-colors">
@@ -3050,7 +4522,7 @@ export default function DashboardPage() {
                 ].map(({ label, val }) => (
                   <div key={label} className="flex justify-between items-start border-b border-border-subtle pb-2 gap-4">
                     <span className="text-text-secondary shrink-0">{label}</span>
-                    <span className="font-semibold text-right break-words">{val !== undefined && val !== null && val !== '' ? String(val) : '—'}</span>
+                    <span className="font-semibold text-right break-words">{val !== undefined && val !== null && val !== '' ? String(val) : 'N/A'}</span>
                   </div>
                 ))}
                 {viewingTradeDoc.validation_warnings?.length > 0 && (
@@ -3089,7 +4561,130 @@ export default function DashboardPage() {
                 disabled={isDeletingTradeDoc}
                 className="px-3.5 py-2 bg-red-600 text-white font-semibold rounded hover:opacity-90 active:scale-95 transition-all disabled:opacity-50 flex items-center gap-1.5"
               >
-                {isDeletingTradeDoc ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Deleting…</> : 'Delete Document'}
+                {isDeletingTradeDoc ? <><ThreeDotLoader size="md" /> Deleting…</> : 'Delete Document'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── E-Way Bill: View Side Panel ── */}
+      {viewingEwayBill && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-bg-secondary border border-border-subtle rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col text-text-primary">
+            <div className="flex items-center justify-between p-5 border-b border-border-subtle">
+              <div>
+                <h3 className="font-bold text-lg">E-Way Bill Document | {viewingEwayBill.file_name}</h3>
+                <p className="text-xs font-mono text-text-secondary">E-Way Bill · status: {viewingEwayBill.status}</p>
+              </div>
+              <button onClick={() => setViewingEwayBill(null)} className="p-2 rounded hover:bg-bg-primary transition-colors">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="flex flex-1 flex-col md:flex-row overflow-hidden">
+              {/* Left: file preview */}
+              <div className="w-full md:w-1/2 h-48 md:h-auto border-b md:border-b-0 md:border-r border-border-subtle flex items-center justify-center bg-bg-primary p-4">
+                {viewingEwayBill.file_url && (
+                  viewingEwayBill.file_name?.toLowerCase().endsWith('.pdf') ? (
+                    <iframe
+                      src={getFileUrl(viewingEwayBill.file_url)}
+                      className="w-full h-full rounded bg-bg-primary border border-border-subtle"
+                      title="E-Way Bill preview"
+                    />
+                  ) : (
+                    <img
+                      src={getFileUrl(viewingEwayBill.file_url)}
+                      alt="E-Way Bill"
+                      className="max-w-full max-h-full object-contain rounded"
+                    />
+                  )
+                )}
+              </div>
+
+              {/* Right: extracted fields */}
+              <div className="w-full md:w-1/2 overflow-y-auto p-5 space-y-3 font-mono text-xs">
+                <h4 className="font-bold text-sm mb-3">Extracted Fields</h4>
+                {[
+                  { label: 'E-Way Bill Number', val: viewingEwayBill.eway_bill_number || viewingEwayBill.raw_data?.eway_bill_number },
+                  { label: 'BE Number', val: viewingEwayBill.be_number || viewingEwayBill.raw_data?.be_number },
+                  { label: 'Vehicle Number', val: viewingEwayBill.vehicle_number || viewingEwayBill.raw_data?.vehicle_number },
+                ].map(({ label, val }) => (
+                  <div key={label} className="flex justify-between items-start border-b border-border-subtle pb-2 gap-4">
+                    <span className="text-text-secondary shrink-0">{label}</span>
+                    <span className="font-semibold text-right break-words">{val !== undefined && val !== null && val !== '' ? String(val) : 'N/A'}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── E-Way Bill: Delete Confirmation ── */}
+      {deletingEwayBillId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-bg-secondary border border-border-subtle rounded-xl shadow-2xl w-full max-w-md p-6 space-y-4 font-mono text-sm text-text-primary">
+            <h3 className="font-bold text-lg flex items-center gap-2 text-red-500">
+              <AlertCircle className="w-5 h-5" /> Delete E-Way Bill
+            </h3>
+            <p className="text-text-secondary leading-relaxed">
+              This will soft-delete the E-Way bill and remove its Cloud Vault entry. The record can be recovered by an administrator but will no longer appear in your workspace.
+            </p>
+            <div className="flex justify-end gap-2 border-t border-border-subtle pt-4">
+              <button
+                onClick={() => setDeletingEwayBillId(null)}
+                className="px-3.5 py-2 border border-border-subtle rounded hover:bg-bg-primary transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  await handleDeleteEwayBill(deletingEwayBillId);
+                  setDeletingEwayBillId(null);
+                }}
+                className="px-3.5 py-2 bg-red-600 text-white font-semibold rounded hover:opacity-90 active:scale-95 transition-all"
+              >
+                Delete Bill
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {excelPopupOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-bg-secondary border border-border-subtle rounded-xl shadow-2xl w-full max-w-md p-6 space-y-6 font-mono text-sm text-text-primary text-center">
+            <div className="flex flex-col items-center gap-3">
+              <div className="w-12 h-12 bg-green-500/10 border border-green-500/20 text-green-500 rounded-full flex items-center justify-center">
+                <FileCheck className="w-6 h-6" />
+              </div>
+              <h3 className="font-bold text-lg text-text-primary">Excel Created Successfully</h3>
+              <p className="text-text-secondary text-xs leading-relaxed max-w-xs">
+                Your invoices have been exported into a styled Excel spreadsheet batch. Choose an action below:
+              </p>
+            </div>
+            
+            <div className="flex flex-col gap-2 pt-2">
+              <button
+                onClick={handleDownloadExcelPopup}
+                className="w-full px-4 py-2.5 bg-accent text-accent-foreground font-semibold rounded hover:opacity-90 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+              >
+                <Download className="w-4 h-4" /> Download Excel
+              </button>
+              <button
+                onClick={handleDoneExcel}
+                disabled={isClearingData}
+                className="w-full px-4 py-2.5 border border-border-subtle rounded hover:bg-bg-primary transition-colors flex items-center justify-center gap-2 font-semibold"
+              >
+                {isClearingData ? (
+                  <>
+                    <ThreeDotLoader size="md" /> Clearing Data…
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="w-4 h-4 text-green-500" /> Done
+                  </>
+                )}
               </button>
             </div>
           </div>

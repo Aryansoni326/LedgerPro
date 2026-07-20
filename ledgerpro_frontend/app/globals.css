@@ -4,13 +4,13 @@
 
 :root {
   --bg-primary: #ffffff;
-  --bg-secondary: #f9f9f9;
-  --text-primary: #111111;
-  --text-secondary: #666666;
+  --bg-secondary: #fafafa;
+  --text-primary: #0a0a0a;
+  --text-secondary: #525252;
   --border-subtle: #e5e5e5;
-  --accent: #000000;
+  --accent: #0a0a0a;
   --accent-foreground: #ffffff;
-  /* Aliases for Recharts / canvas consumers */
+  --brand-glow: rgba(0, 0, 0, 0.06);
   --color-bg-primary: var(--bg-primary);
   --color-bg-secondary: var(--bg-secondary);
   --color-text-primary: var(--text-primary);
@@ -19,13 +19,14 @@
 }
 
 html.dark {
-  --bg-primary: #000000;
-  --bg-secondary: #111111;
-  --text-primary: #eeeeee;
-  --text-secondary: #999999;
-  --border-subtle: #222222;
-  --accent: #ffffff;
-  --accent-foreground: #000000;
+  --bg-primary: #0a0a0a;
+  --bg-secondary: #141414;
+  --text-primary: #fafafa;
+  --text-secondary: #a3a3a3;
+  --border-subtle: #262626;
+  --accent: #fafafa;
+  --accent-foreground: #0a0a0a;
+  --brand-glow: rgba(255, 255, 255, 0.08);
   --color-bg-primary: var(--bg-primary);
   --color-bg-secondary: var(--bg-secondary);
   --color-text-primary: var(--text-primary);
@@ -37,5 +38,166 @@ body {
   color: var(--text-primary);
   background-color: var(--bg-primary);
   min-height: 100vh;
-  transition: background-color 0.2s ease, color 0.2s ease;
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  transition: background-color 0.25s ease, color 0.25s ease;
+}
+
+@layer components {
+  .landing-section {
+    @apply relative z-10 py-12 md:py-16 px-6 md:px-8 lg:px-12;
+  }
+
+  .landing-container {
+    @apply max-w-6xl mx-auto;
+  }
+
+  .premium-card {
+    @apply rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-bg-primary;
+    box-shadow: 0 8px 30px rgb(0 0 0 / 0.04);
+  }
+
+  html.dark .premium-card {
+    box-shadow: 0 8px 30px rgb(0 0 0 / 0.35);
+  }
+
+  .glass-panel {
+    @apply rounded-2xl border border-neutral-200 dark:border-neutral-800 backdrop-blur-md;
+    background-color: rgb(255 255 255 / 0.72);
+  }
+
+  html.dark .glass-panel {
+    background-color: rgb(10 10 10 / 0.72);
+  }
+
+  .landing-dot-pattern {
+    background-image: radial-gradient(circle at 1px 1px, rgb(163 163 163 / 0.18) 1px, transparent 0);
+    background-size: 24px 24px;
+  }
+
+  html.dark .landing-dot-pattern {
+    background-image: radial-gradient(circle at 1px 1px, rgb(163 163 163 / 0.1) 1px, transparent 0);
+  }
+
+  .badge-pill {
+    @apply inline-flex items-center gap-2 text-[11px] font-medium uppercase tracking-widest text-text-secondary px-3 py-1 rounded-full border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900;
+  }
+
+  .hero-badge {
+    @apply inline-flex items-center gap-2.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-text-secondary px-4 py-1.5 rounded-full border border-neutral-200/80 dark:border-neutral-700/80 backdrop-blur-sm;
+    background-color: color-mix(in srgb, var(--bg-primary) 60%, transparent);
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.04), inset 0 1px 0 rgb(255 255 255 / 0.6);
+  }
+
+  html.dark .hero-badge {
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.3), inset 0 1px 0 rgb(255 255 255 / 0.04);
+  }
+
+  .hero-badge-dot {
+    @apply w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0;
+    box-shadow: 0 0 0 3px rgb(16 185 129 / 0.15);
+    animation: hero-pulse 2.4s ease-in-out infinite;
+  }
+
+  .hero-headline {
+    @apply text-[2.25rem] sm:text-[2.75rem] md:text-[3.25rem] font-semibold tracking-[-0.035em] leading-[1.08] mb-4;
+  }
+
+  .hero-headline-gradient {
+    background: linear-gradient(
+      135deg,
+      var(--text-primary) 0%,
+      color-mix(in srgb, var(--text-primary) 72%, var(--text-secondary)) 55%,
+      var(--text-secondary) 100%
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .hero-headline-sub {
+    @apply font-medium mt-2;
+    color: color-mix(in srgb, var(--text-secondary) 90%, transparent);
+    letter-spacing: -0.02em;
+  }
+
+  .hero-tagline {
+    @apply text-base sm:text-lg md:text-xl font-medium tracking-[-0.02em] leading-snug max-w-2xl;
+    background: linear-gradient(
+      135deg,
+      var(--text-primary) 0%,
+      color-mix(in srgb, var(--text-primary) 75%, var(--text-secondary)) 100%
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .hero-quote-text {
+    @apply absolute inset-0 flex items-center justify-center gap-1 text-sm sm:text-[15px] font-medium tracking-[-0.01em] leading-snug px-2;
+    color: color-mix(in srgb, var(--text-secondary) 92%, transparent);
+  }
+
+  .hero-quote-mark {
+    @apply text-lg sm:text-xl font-serif leading-none shrink-0;
+    color: color-mix(in srgb, var(--text-primary) 35%, transparent);
+  }
+
+  .hero-subtext {
+    @apply text-sm sm:text-[15px] max-w-md mb-8 leading-relaxed;
+    color: color-mix(in srgb, var(--text-secondary) 90%, transparent);
+  }
+
+  .hero-subtext-mono {
+    @apply font-mono text-[13px] sm:text-sm border border-neutral-200/70 dark:border-neutral-800/70 px-2 py-0.5 rounded-md;
+    color: color-mix(in srgb, var(--text-primary) 80%, transparent);
+    background-color: color-mix(in srgb, var(--bg-secondary) 80%, transparent);
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 px-6 py-3 rounded-lg text-sm font-medium bg-accent text-accent-foreground transition-all hover:opacity-90 shadow-sm hover:shadow-md active:scale-[0.98];
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 px-6 py-3 rounded-lg text-sm font-medium border border-neutral-200 dark:border-neutral-800 bg-bg-primary hover:bg-neutral-50 dark:hover:bg-neutral-900 transition-all active:scale-[0.98];
+  }
+}
+
+.landing-gradient-mesh {
+  background-image:
+    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(0, 0, 0, 0.03), transparent),
+    radial-gradient(ellipse 60% 40% at 100% 0%, rgba(0, 0, 0, 0.02), transparent),
+    radial-gradient(ellipse 50% 30% at 0% 50%, rgba(163, 163, 163, 0.05), transparent);
+}
+
+html.dark .landing-gradient-mesh {
+  background-image:
+    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(255, 255, 255, 0.04), transparent),
+    radial-gradient(ellipse 60% 40% at 100% 0%, rgba(255, 255, 255, 0.03), transparent),
+    radial-gradient(ellipse 50% 30% at 0% 50%, rgba(163, 163, 163, 0.04), transparent);
+}
+
+.pricing-card-popular {
+  @apply border-t-2 border-t-neutral-900 dark:border-t-neutral-100 bg-gradient-to-b from-neutral-50 to-white dark:from-neutral-900 dark:to-neutral-950;
+  box-shadow: 0 8px 30px rgb(0 0 0 / 0.06);
+}
+
+html.dark .pricing-card-popular {
+  box-shadow: 0 8px 30px rgb(0 0 0 / 0.4);
+}
+
+@keyframes hero-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.65;
+    transform: scale(0.92);
+  }
+}
+
+/* Override font-mono class to normal sans-serif font */
+.font-mono {
+  font-family: var(--font-geist-sans), system-ui, sans-serif !important;
 }

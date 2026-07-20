@@ -9,6 +9,24 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        sans: ["var(--font-geist-sans)", "system-ui", "sans-serif"],
+      },
+      keyframes: {
+        float: {
+          "0%, 100%": { transform: "translateY(0px)" },
+          "50%": { transform: "translateY(-14px)" },
+        },
+        shimmer: {
+          "0%": { backgroundPosition: "200% center" },
+          "100%": { backgroundPosition: "-200% center" },
+        },
+      },
+      animation: {
+        float: "float 7s ease-in-out infinite",
+        "float-delayed": "float 7s ease-in-out 2s infinite",
+        shimmer: "shimmer 4s linear infinite",
+      },
       colors: {
         bg: {
           primary: "var(--bg-primary)",

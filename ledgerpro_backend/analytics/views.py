@@ -1,6 +1,7 @@
 import logging
 from datetime import date, datetime, timedelta
 
+from dateutil import parser as dateutil_parser
 from dateutil.relativedelta import relativedelta
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
@@ -12,17 +13,16 @@ from invoices.models import Bill
 logger = logging.getLogger(__name__)
 
 
-def _get_verified_bills(firm, range_param):
+def _get_analytics_bills(firm, range_param):
     """
-    Returns only status='verified' bills for the firm within the date range.
-    Bills with status 'processing', 'needs_review', 'extraction_failed', or
-    'approved' are explicitly excluded to keep analytics provisional-free.
+    Bills with extracted data used for dashboard analytics.
+    Includes verified bills and needs_review (AI-extracted, pending confirmation).
     """
     qs = Bill.objects.filter(
         firm=firm,
-        status='verified',
-        is_deleted=False
-    )
+        is_deleted=False,
+        status__in=['verified', 'needs_review'],
+    ).exclude(raw_data__isnull=True)
 
     today = date.today()
     if range_param == 'month':
@@ -41,16 +41,46 @@ def _get_verified_bills(firm, range_param):
     return qs, start, today
 
 
-def _parse_invoice_date(bill):
-    """Safely parse the invoice_date from raw_data JSON."""
+_DATE_FORMATS = (
+    '%Y-%m-%d',
+    '%d-%m-%Y',
+    '%d/%m/%Y',
+    '%d-%m-%y',
+    '%d/%m/%y',
+    '%d-%b-%Y',
+    '%d-%b-%y',
+    '%d %b %Y',
+    '%d %b %y',
+)
+
+
+def _parse_date_string(raw_date) -> date | None:
+    """Parse common Indian / ISO bill date strings. Returns None if unparseable."""
+    if raw_date is None:
+        return None
+    s = str(raw_date).strip()
+    if not s or s.lower() in ('nan', 'none', 'null', ''):
+        return None
+    s = s.split(' ')[0]
+
+    for fmt in _DATE_FORMATS:
+        try:
+            return datetime.strptime(s, fmt).date()
+        except ValueError:
+            continue
+
+    # Ambiguous strings like 20-06-2026 — prefer day-first (Indian format)
     try:
-        raw_date = bill.raw_data.get('invoice_date') if bill.raw_data else None
-        if raw_date:
-            return datetime.strptime(str(raw_date)[:10], '%Y-%m-%d').date()
-    except (ValueError, AttributeError, TypeError):
-        pass
-    # Fall back to upload date if invoice_date is missing/malformed
-    return bill.uploaded_at.date()
+        return dateutil_parser.parse(s, dayfirst=True).date()
+    except (ValueError, TypeError, OverflowError):
+        return None
+
+
+def _parse_invoice_date(bill) -> date | None:
+    """Bill date from raw_data only — never use upload date for chart bucketing."""
+    if not bill.raw_data:
+        return None
+    return _parse_date_string(bill.raw_data.get('invoice_date'))
 
 
 def _safe_float(val, default=0.0):
@@ -60,14 +90,22 @@ def _safe_float(val, default=0.0):
         return default
 
 
+def _bill_in_range(bill, start, end) -> bool:
+    """Include bills only when their invoice/bill date falls in the selected range."""
+    inv_date = _parse_invoice_date(bill)
+    if inv_date is None:
+        return False
+    return start <= inv_date <= end
+
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def analytics_turnover(request, firm_id):
     """
     GET /api/firms/{firm_id}/analytics/turnover?range=month|quarter|year
 
-    Returns time-bucketed arrays of verified purchase and sale invoice totals
-    for rendering a Recharts line chart. Only status='verified' bills are counted.
+    Returns time-bucketed arrays of purchase and sale invoice totals
+    for rendering a Recharts line chart. Counts verified and extracted (needs_review) bills.
 
     Response shape:
     [
@@ -80,7 +118,7 @@ def analytics_turnover(request, firm_id):
         return firm
 
     range_param = request.GET.get('range', 'year')
-    qs, start, end = _get_verified_bills(firm, range_param)
+    qs, start, end = _get_analytics_bills(firm, range_param)
 
     # Build buckets based on range
     buckets = {}
@@ -111,14 +149,21 @@ def analytics_turnover(request, firm_id):
 
     # Aggregate bills into buckets
     for bill in qs:
-        inv_date = _parse_invoice_date(bill)
-        if inv_date < start or inv_date > end:
+        if not bill.raw_data:
+            continue
+        if not _bill_in_range(bill, start, end):
             continue
 
-        total = _safe_float(bill.raw_data.get('total_amount') if bill.raw_data else None)
+        total = _safe_float(bill.raw_data.get('taxable_amount') if bill.raw_data else None)
+        if total == 0:
+            total = _safe_float(bill.raw_data.get('total_amount') if bill.raw_data else None)
         bill_type = (bill.raw_data.get('bill_type') or 'purchase').lower() if bill.raw_data else 'purchase'
         if bill_type not in ('purchase', 'sale'):
             bill_type = 'purchase'
+
+        inv_date = _parse_invoice_date(bill)
+        if inv_date is None:
+            continue
 
         if range_param == 'month':
             label = inv_date.strftime('%b %d')
@@ -159,28 +204,36 @@ def analytics_summary(request, firm_id):
     - net_gst_liability  (output_tax - input_tax_credit)
     - purchase_vs_sale   (for pie chart: [{ name, value }])
 
-    Only status='verified' bills are included — no provisional AI guesses.
+    Only verified and needs_review bills with extracted data are included.
     """
     firm = get_firm_or_403(request, firm_id)
     if isinstance(firm, Response):
         return firm
 
     range_param = request.GET.get('range', 'year')
-    qs, start, end = _get_verified_bills(firm, range_param)
+    qs, start, end = _get_analytics_bills(firm, range_param)
 
     total_purchase = 0.0
     total_sale = 0.0
     input_tax = 0.0    # GST paid on purchases (ITC claimable)
     output_tax = 0.0   # GST collected on sales (payable to govt)
+    verified_count = 0
+    needs_review_count = 0
 
     for bill in qs:
         if not bill.raw_data:
             continue
-        inv_date = _parse_invoice_date(bill)
-        if inv_date < start or inv_date > end:
+        if not _bill_in_range(bill, start, end):
             continue
 
+        if bill.status == 'verified':
+            verified_count += 1
+        elif bill.status == 'needs_review':
+            needs_review_count += 1
+
         taxable = _safe_float(bill.raw_data.get('taxable_amount'))
+        if taxable == 0:
+            taxable = _safe_float(bill.raw_data.get('total_amount'))
         cgst = _safe_float(bill.raw_data.get('cgst'))
         sgst = _safe_float(bill.raw_data.get('sgst'))
         igst = _safe_float(bill.raw_data.get('igst'))
@@ -209,6 +262,8 @@ def analytics_summary(request, firm_id):
         'range': range_param,
         'period_start': start.isoformat(),
         'period_end': end.isoformat(),
+        'verified_count': verified_count,
+        'needs_review_count': needs_review_count,
         'purchase_vs_sale': [
             {'name': 'Purchases', 'value': round(total_purchase, 2)},
             {'name': 'Sales', 'value': round(total_sale, 2)},

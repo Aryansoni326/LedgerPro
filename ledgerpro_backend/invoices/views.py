@@ -225,11 +225,15 @@ def manage_invoice(request, pk):
             warnings.append(f"Total mismatch: taxable + taxes sum to ₹{computed_total:.2f}, but total_amount is ₹{total:.2f}.")
 
         # GSTIN check
-        party_gstin = current_raw_data.get('party_gstin')
-        if party_gstin:
-            gstin_regex = r'^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$'
-            if not re.match(gstin_regex, str(party_gstin).strip().upper()):
-                warnings.append(f"Invalid party GSTIN format: '{party_gstin}'.")
+        gstin_regex = r'^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$'
+        gstin_from = current_raw_data.get('gstin_from')
+        if gstin_from:
+            if not re.match(gstin_regex, str(gstin_from).strip().upper()):
+                warnings.append(f"Invalid supplier (From) GSTIN format: '{gstin_from}'.")
+        gstin_to = current_raw_data.get('gstin_to')
+        if gstin_to:
+            if not re.match(gstin_regex, str(gstin_to).strip().upper()):
+                warnings.append(f"Invalid buyer (To) GSTIN format: '{gstin_to}'.")
 
         # Intra vs Inter state checks
         has_intra = (cgst > 0 or sgst > 0)
@@ -377,16 +381,13 @@ def export_excel(request, firm_id):
     if not exported_bill_ids:
         return Response({'error': 'No matching invoice records found for export.'}, status=status.HTTP_400_BAD_REQUEST)
 
-    # 2. Split bills
-    purchase_list = []
-    sale_list = []
+    # 2. Group bills by upload date
+    from collections import defaultdict
+    bills_by_date = defaultdict(list)
     for b in bills_list:
-        r_data = b.raw_data or {}
-        b_type = r_data.get('bill_type', 'purchase')
-        if b_type in ['sale', 'sales']:
-            sale_list.append(b)
-        else:
-            purchase_list.append(b)
+        bills_by_date[b.uploaded_at.date()].append(b)
+
+    sorted_dates = sorted(bills_by_date.keys())
 
     # 3. Create Spreadsheet Data
     import io
@@ -402,8 +403,10 @@ def export_excel(request, firm_id):
             rows.append({
                 'Date of Bill': r.get('invoice_date', ''),
                 'Invoice Number': r.get('invoice_number', ''),
-                'Party Name': r.get('party_name', ''),
-                'Party GSTIN': r.get('party_gstin', ''),
+                'Seller (From)': r.get('party_name_from', ''),
+                'Seller GSTIN': r.get('gstin_from', ''),
+                'Buyer (To)': r.get('party_name_to', ''),
+                'Buyer GSTIN': r.get('gstin_to', ''),
                 'Place of Supply': r.get('place_of_supply', ''),
                 'Taxable Amount': float(r.get('taxable_amount', 0.0) or 0.0),
                 'CGST': float(r.get('cgst', 0.0) or 0.0),
@@ -414,21 +417,24 @@ def export_excel(request, firm_id):
         return rows
 
     columns = [
-        'Date of Bill', 'Invoice Number', 'Party Name', 'Party GSTIN',
-        'Place of Supply', 'Taxable Amount', 'CGST', 'SGST', 'IGST', 'Total Amount'
+        'Date of Bill', 'Invoice Number', 'Seller (From)', 'Seller GSTIN',
+        'Buyer (To)', 'Buyer GSTIN', 'Place of Supply', 'Taxable Amount',
+        'CGST', 'SGST', 'IGST', 'Total Amount'
     ]
-    df_purchase = pd.DataFrame(make_sheet_data(purchase_list), columns=columns)
-    df_sale = pd.DataFrame(make_sheet_data(sale_list), columns=columns)
 
     # 4. Generate openpyxl workbook
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        df_purchase.to_excel(writer, sheet_name='Purchase', index=False)
-        df_sale.to_excel(writer, sheet_name='Sale', index=False)
+        for d in sorted_dates:
+            sheet_name = d.strftime('%d-%m-%Y')
+            sub_bills = bills_by_date[d]
+            df = pd.DataFrame(make_sheet_data(sub_bills), columns=columns)
+            df.to_excel(writer, sheet_name=sheet_name, index=False)
 
         workbook = writer.book
-        for name in ['Purchase', 'Sale']:
-            worksheet = workbook[name]
+        for d in sorted_dates:
+            sheet_name = d.strftime('%d-%m-%Y')
+            worksheet = workbook[sheet_name]
             worksheet.freeze_panes = 'A2'
 
             # Bold Header Fill & Font
@@ -436,7 +442,7 @@ def export_excel(request, firm_id):
             header_fill = PatternFill(start_color='1F4E79', end_color='1F4E79', fill_type='solid')
             header_align = Alignment(horizontal='center', vertical='center', wrap_text=True)
 
-            for col_idx in range(1, 11):
+            for col_idx in range(1, 13):
                 cell = worksheet.cell(row=1, column=col_idx)
                 cell.font = header_font
                 cell.fill = header_fill
@@ -451,7 +457,7 @@ def export_excel(request, firm_id):
             # Currency styling
             currency_format = '"₹"#,##0.00'
             for row in range(2, worksheet.max_row + 1):
-                for col_idx in [6, 7, 8, 9, 10]:
+                for col_idx in [8, 9, 10, 11, 12]:
                     cell = worksheet.cell(row=row, column=col_idx)
                     cell.number_format = currency_format
                     cell.alignment = Alignment(horizontal='right')
@@ -466,7 +472,7 @@ def export_excel(request, firm_id):
                 bottom=Side(style='double', color='1F4E79')
             )
 
-            for col_idx in [6, 7, 8, 9, 10]:
+            for col_idx in [8, 9, 10, 11, 12]:
                 col_letter = get_column_letter(col_idx)
                 formula = f"=SUM({col_letter}2:{col_letter}{total_row_idx - 1})"
                 cell = worksheet.cell(row=total_row_idx, column=col_idx, value=formula)
@@ -519,8 +525,160 @@ def export_excel(request, firm_id):
         'file_name': batch.file_name,
         'file_url': batch.file_url,
         'exported_count': len(exported_bill_ids),
+        'bill_ids': exported_bill_ids,
         'message': 'Excel export generated successfully.'
     }, status=status.HTTP_201_CREATED)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated, HasFirmAccess])
+def import_existing_excel(request, firm_id):
+    """
+    POST: Upload an existing LedgerPro Excel workbook.
+    Reads each sheet named 'DD-MM-YYYY', parses rows, and creates verified Bill records
+    with uploaded_at matching that sheet date.
+    """
+    firm = get_firm_or_403(request, firm_id)
+    if isinstance(firm, Response):
+        return firm
+
+    excel_file = request.FILES.get('excel_file')
+    if not excel_file:
+        return Response({'error': 'No excel file provided.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    import pandas as pd
+    from datetime import datetime
+    import re
+    from django.utils.timezone import make_aware, timezone
+    from django.utils import timezone as django_timezone
+
+    try:
+        # Load the workbook
+        xls = pd.ExcelFile(excel_file)
+        imported_count = 0
+        date_pattern = re.compile(r'^\d{2}-\d{2}-\d{4}$')
+
+        # Column mapping helper
+        def get_val(row_data, keys_list, default=''):
+            for k in keys_list:
+                if k in row_data and not pd.isna(row_data[k]):
+                    return row_data[k]
+            return default
+
+        for sheet_name in xls.sheet_names:
+            # Determine base sheet datetime
+            aware_datetime = None
+            if date_pattern.match(sheet_name):
+                try:
+                    sheet_date = datetime.strptime(sheet_name, '%d-%m-%Y')
+                    aware_datetime = make_aware(sheet_date)
+                except Exception:
+                    pass
+
+            if not aware_datetime:
+                aware_datetime = django_timezone.now()
+
+            df = xls.parse(sheet_name)
+            # Normalize headers
+            df.columns = [str(col).strip() for col in df.columns]
+
+            for _, row in df.iterrows():
+                # Skip summary total rows
+                date_of_bill_val = get_val(row, ['Date of Bill', 'Date', 'Date Of Bill'])
+                invoice_no_val = get_val(row, ['Invoice Number', 'Invoice No', 'Invoice number', 'Invoice no', 'Invoice No.'])
+
+                if str(date_of_bill_val).strip().lower() == 'total' or pd.isna(invoice_no_val):
+                    continue
+
+                # Map columns
+                invoice_number = str(invoice_no_val).split('.')[0].strip() # remove any float parsing decimals
+                if not invoice_number or invoice_number == 'nan':
+                    continue
+
+                party_name_from = str(get_val(row, ['Seller (From)', 'Seller', 'From', 'Seller Name', 'Seller name'])).strip()
+                party_name_to = str(get_val(row, ['Buyer (To)', 'Buyer', 'To', 'Buyer Name', 'Buyer name'])).strip()
+                
+                if party_name_from == 'nan' or party_name_from == '':
+                    party_name_from = 'Unknown Seller'
+                if party_name_to == 'nan' or party_name_to == '':
+                    party_name_to = 'Unknown Buyer'
+
+                bill_type = 'sale' if firm.name.lower() in party_name_from.lower() else 'purchase'
+
+                # Try to parse 'Date of Bill' cell to use as uploaded_at
+                date_of_bill_str = str(date_of_bill_val).strip()
+                row_datetime = aware_datetime
+                if date_of_bill_str and date_of_bill_str.lower() != 'nan':
+                    # Try common date formats
+                    for fmt in ['%d-%m-%Y', '%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y']:
+                        try:
+                            parsed_date = datetime.strptime(date_of_bill_str.split(' ')[0], fmt)
+                            row_datetime = make_aware(parsed_date)
+                            break
+                        except Exception:
+                            continue
+
+                try:
+                    taxable_amount = float(get_val(row, ['Taxable Amount', 'Assessable Amount', 'Taxable Value', 'Amount'], 0.0))
+                except Exception:
+                    taxable_amount = 0.0
+
+                try:
+                    cgst = float(get_val(row, ['CGST', 'Cgst', 'Cgst Amount', 'CGST Amount'], 0.0))
+                except Exception:
+                    cgst = 0.0
+
+                try:
+                    sgst = float(get_val(row, ['SGST', 'Sgst', 'Sgst Amount', 'SGST Amount'], 0.0))
+                except Exception:
+                    sgst = 0.0
+
+                try:
+                    igst = float(get_val(row, ['IGST', 'Igst', 'Igst Amount', 'IGST Amount'], 0.0))
+                except Exception:
+                    igst = 0.0
+
+                try:
+                    total_amount = float(get_val(row, ['Total Amount', 'Total Amt', 'Total', 'Total Value'], 0.0))
+                except Exception:
+                    total_amount = 0.0
+
+                raw_data = {
+                    'bill_type': bill_type,
+                    'invoice_date': date_of_bill_str if date_of_bill_str != 'nan' else row_datetime.strftime('%Y-%m-%d'),
+                    'invoice_number': invoice_number,
+                    'party_name_from': party_name_from,
+                    'gstin_from': str(get_val(row, ['Seller GSTIN', 'Seller GST', 'Seller Gstin', 'Seller Gst'])).strip() if not pd.isna(get_val(row, ['Seller GSTIN', 'Seller GST', 'Seller Gstin', 'Seller Gst'])) else '',
+                    'party_name_to': party_name_to,
+                    'gstin_to': str(get_val(row, ['Buyer GSTIN', 'Buyer GST', 'Buyer Gstin', 'Buyer Gst'])).strip() if not pd.isna(get_val(row, ['Buyer GSTIN', 'Buyer GST', 'Buyer Gstin', 'Buyer Gst'])) else '',
+                    'place_of_supply': str(get_val(row, ['Place of Supply', 'Place Of Supply', 'Pos', 'POS'])).strip() if not pd.isna(get_val(row, ['Place of Supply', 'Place Of Supply', 'Pos', 'POS'])) else '',
+                    'taxable_amount': taxable_amount,
+                    'cgst': cgst,
+                    'sgst': sgst,
+                    'igst': igst,
+                    'total_amount': total_amount,
+                }
+
+                # Create Bill record
+                Bill.objects.create(
+                    firm=firm,
+                    status='verified',
+                    file_name=f"Imported_{sheet_name}_{invoice_number}.pdf",
+                    file_url='',
+                    file_size=0,
+                    uploaded_by=request.user,
+                    uploaded_at=row_datetime,
+                    raw_data=raw_data
+                )
+                imported_count += 1
+
+        return Response({
+            'message': f'Excel file imported successfully. Parsed {imported_count} records.',
+            'imported_count': imported_count
+        }, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        return Response({'error': f'Failed to parse excel file: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
 
 
 
