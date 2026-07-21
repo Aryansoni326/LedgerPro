@@ -255,14 +255,14 @@ EMAIL_USE_SSL = env.bool('EMAIL_USE_SSL', default=False)
 DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default='LedgerPro <noreply@ledgerpro.in>')
 
 # ── Google OAuth 2.0 ──────────────────────────────────────────────────────────
-# Create credentials at: https://console.cloud.google.com/apis/credentials
-# Set the Authorized Redirect URI to:  http://localhost:8000/api/auth/google/callback
-# (or your production domain equivalent)
+# Redirect URI must be the FRONTEND callback page (where Google sends the user),
+# NOT the API domain. Example production:
+#   https://ledger-pro-topaz.vercel.app/auth/google/callback
 GOOGLE_OAUTH_CLIENT_ID = env('GOOGLE_OAUTH_CLIENT_ID', default='')
 GOOGLE_OAUTH_CLIENT_SECRET = env('GOOGLE_OAUTH_CLIENT_SECRET', default='')
 GOOGLE_OAUTH_REDIRECT_URI = env(
     'GOOGLE_OAUTH_REDIRECT_URI',
-    default='http://localhost:3000/auth/google/callback'
+    default=f"{FRONTEND_URL.rstrip('/')}/auth/google/callback",
 )
 
 # Resend API key (optional — only needed if not using SMTP)
