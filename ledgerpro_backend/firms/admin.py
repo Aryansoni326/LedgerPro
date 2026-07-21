@@ -1,5 +1,7 @@
 from django.contrib import admin
+
 from .models import Firm
+
 
 @admin.register(Firm)
 class FirmAdmin(admin.ModelAdmin):

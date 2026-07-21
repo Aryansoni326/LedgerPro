@@ -1,5 +1,7 @@
 from django.contrib import admin
+
 from .models import Bill, ExcelExportBatch
+
 
 @admin.register(Bill)
 class BillAdmin(admin.ModelAdmin):

@@ -546,11 +546,12 @@ def import_existing_excel(request, firm_id):
     if not excel_file:
         return Response({'error': 'No excel file provided.'}, status=status.HTTP_400_BAD_REQUEST)
 
-    import pandas as pd
-    from datetime import datetime
     import re
-    from django.utils.timezone import make_aware, timezone
+    from datetime import datetime
+
+    import pandas as pd
     from django.utils import timezone as django_timezone
+    from django.utils.timezone import make_aware
 
     try:
         # Load the workbook
@@ -597,7 +598,7 @@ def import_existing_excel(request, firm_id):
 
                 party_name_from = str(get_val(row, ['Seller (From)', 'Seller', 'From', 'Seller Name', 'Seller name'])).strip()
                 party_name_to = str(get_val(row, ['Buyer (To)', 'Buyer', 'To', 'Buyer Name', 'Buyer name'])).strip()
-                
+
                 if party_name_from == 'nan' or party_name_from == '':
                     party_name_from = 'Unknown Seller'
                 if party_name_to == 'nan' or party_name_to == '':

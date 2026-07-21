@@ -1,5 +1,7 @@
 from django.contrib import admin
+
 from .models import ImportExportRecord
+
 
 @admin.register(ImportExportRecord)
 class ImportExportRecordAdmin(admin.ModelAdmin):

@@ -1,5 +1,4 @@
 import base64
-from datetime import datetime
 import json
 import logging
 import os
@@ -7,11 +6,12 @@ import re
 import time
 import urllib.error
 import urllib.request
+from datetime import datetime
 
-from celery import shared_task
-from django.conf import settings
 import dateutil.parser
 import pypdf
+from celery import shared_task
+from django.conf import settings
 
 from .models import Bill
 
@@ -53,12 +53,12 @@ def extract_invoice_number(text):
     if match1 and match1.group(1).strip():
         val = match1.group(1).strip()
         return val.split()[0]
-    
+
     match2 = re.search(r'Invoice\s*No\.?\s*(.*?)\s*Delivery\s*Note', text_clean, re.IGNORECASE)
     if match2:
         val = match2.group(1).strip()
         return val.split()[0]
-    
+
     match3 = re.search(r'Invoice\s*No\.?\s*([A-Za-z0-9_\-/]+)', text_clean, re.IGNORECASE)
     if match3:
         return match3.group(1)
@@ -70,11 +70,11 @@ def extract_date(text):
     match = re.search(r'Dated\s*(\d{1,2}-[A-Za-z]{3}-\d{2,4})', text_clean, re.IGNORECASE)
     if match:
         return match.group(1)
-    
+
     match2 = re.search(r'\b(\d{1,2}-[A-Za-z]{3}-\d{2,4})\b', text_clean)
     if match2:
         return match2.group(1)
-    
+
     match3 = re.search(r'\b(\d{4}-\d{2}-\d{2})\b', text_clean)
     if match3:
         return match3.group(1)
@@ -93,33 +93,33 @@ def clean_amount(val_str):
 
 def extract_amounts(text):
     text_clean = text.replace('\n', ' ')
-    
+
     cgst = 0.0
     sgst = 0.0
     igst = 0.0
     cess = 0.0
-    
+
     cgst_match = re.search(r'CGST\s*@\s*\d+\s*%\s*(?:\(Output\))?\s*([\d,]+\.\d{2})', text_clean, re.IGNORECASE)
     if cgst_match:
         cgst = clean_amount(cgst_match.group(1))
-        
+
     sgst_match = re.search(r'SGST\s*@\s*\d+\s*%\s*(?:\(Output\))?\s*([\d,]+\.\d{2})', text_clean, re.IGNORECASE)
     if sgst_match:
         sgst = clean_amount(sgst_match.group(1))
-        
+
     igst_match = re.search(r'IGST\s*@\s*\d+\s*%\s*(?:\(Output\))?\s*([\d,]+\.\d{2})', text_clean, re.IGNORECASE)
     if igst_match:
         igst = clean_amount(igst_match.group(1))
-        
+
     cess_match = re.search(r'Cess\s*@\s*\d+\s*%\s*([\d,]+\.\d{2})', text_clean, re.IGNORECASE)
     if cess_match:
         cess = clean_amount(cess_match.group(1))
-        
+
     total = 0.0
     total_match = re.search(r'Total\s*₹?\s*([\d,]+\.\d{2})', text_clean, re.IGNORECASE)
     if total_match:
         total = clean_amount(total_match.group(1))
-        
+
     taxable = 0.0
     total_row_match = re.search(r'Total\s+([\d,]+\.\d{2}[\d,\.\s]*)', text, re.IGNORECASE)
     if total_row_match:
@@ -127,10 +127,10 @@ def extract_amounts(text):
         numbers = re.findall(r'[\d,]+\.\d{2}', row_text)
         if numbers:
             taxable = clean_amount(numbers[-1])
-            
+
     if taxable == 0.0:
         taxable = total - (cgst + sgst + igst + cess)
-        
+
     # Calculate assessable amount by subtracting charges from taxable value
     charges = 0.0
     charge_patterns = [
@@ -143,9 +143,9 @@ def extract_amounts(text):
         matches = re.findall(pattern, text, re.IGNORECASE)
         for m in matches:
             charges += clean_amount(m)
-            
+
     assessable = taxable - charges
-        
+
     return {
         "cgst": cgst,
         "sgst": sgst,
@@ -160,18 +160,18 @@ def extract_amounts(text):
 def extract_parties(text, firm_name="Dinesh Engineers"):
     gstin_pattern = r'\d{2}[A-Z]{5}\d{4}[A-Z]{1}[A-Z\d]{1}[Z|A-Z\d]{1}[A-Z\d]{1}'
     gstins = re.findall(gstin_pattern, text.upper())
-    
+
     unique_gstins = []
     for g in gstins:
         if g not in unique_gstins:
             unique_gstins.append(g)
-            
+
     gstin_from = unique_gstins[0] if len(unique_gstins) > 0 else None
     gstin_to = unique_gstins[1] if len(unique_gstins) > 1 else None
-    
+
     party_from = firm_name
     party_to = "Unknown Buyer"
-    
+
     for pattern in [r'Buyer\s*\(Bill\s*to\)\s*([A-Z\s\.\,&-]{3,})', r'Consignee\s*\(Ship\s*to\)\s*([A-Z\s\.\,&-]{3,})']:
         m = re.search(pattern, text, re.IGNORECASE)
         if m:
@@ -181,7 +181,7 @@ def extract_parties(text, firm_name="Dinesh Engineers"):
             if name:
                 party_to = name
                 break
-                
+
     gstin_name_map = {
         '24ABJPS6700M1ZC': 'Dinesh Engineers',
         '24AGDPS3342Q1Z0': 'Ishwarkrupa Enterprise',
@@ -190,12 +190,12 @@ def extract_parties(text, firm_name="Dinesh Engineers"):
         '24ALTPP8982A1ZL': 'Ganesh Steel Corporation',
         '24ARTPP5617J1Z8': 'Alhadeed Enterprise',
     }
-    
+
     if gstin_from:
         party_from = gstin_name_map.get(gstin_from.upper(), party_from)
     if gstin_to:
         party_to = gstin_name_map.get(gstin_to.upper(), party_to)
-        
+
     return {
         "party_name_from": party_from,
         "gstin_from": gstin_from,
@@ -211,16 +211,16 @@ def parse_pdf_invoice(file_data, firm_name="Dinesh Engineers"):
         text = ""
         for page in reader.pages:
             text += page.extract_text() or ""
-        
+
         if not text.strip():
             return None
-            
+
         inv_num = extract_invoice_number(text)
         date_str = extract_date(text)
         iso_date = parse_to_iso_date(date_str)
         amounts = extract_amounts(text)
         parties = extract_parties(text, firm_name)
-        
+
         return {
             "invoice_number": inv_num,
             "invoice_date": iso_date,
@@ -246,7 +246,7 @@ def parse_pdf_invoice(file_data, firm_name="Dinesh Engineers"):
 def generate_mock_data(bill, firm):
     is_sale = bill.id % 3 == 2
     is_none = bill.id % 3 == 0
-    
+
     if is_none:
         party_name_from = "Unregistered Vendor Co"
         gstin_from = "27BBBBB2222B2Z2"
@@ -340,14 +340,14 @@ def extract_invoice_data(self, bill_id):
 
     # Use mock fallback if key is missing, starts with mock- or is a placeholder template
     is_dummy_key = (
-        not gemini_api_key or 
+        not gemini_api_key or
         gemini_api_key.strip() == "" or
-        gemini_api_key.startswith('mock-') or 
+        gemini_api_key.startswith('mock-') or
         'your_gemini_key' in gemini_api_key.lower() or
         'your-gemini-api-key' in gemini_api_key.lower() or
         'your-gemini-key' in gemini_api_key.lower()
     )
-    
+
     warnings = []
     parsed_json = None
     raw_json_str = None
@@ -510,25 +510,25 @@ def extract_invoice_data(self, bill_id):
     firm_gstin_clean = str(firm.gstin).strip().upper() if firm.gstin else ""
     gstin_from = str(parsed_json.get('gstin_from') or '').strip().upper()
     gstin_to = str(parsed_json.get('gstin_to') or '').strip().upper()
-    
+
     firm_name_clean = str(firm.name).strip().lower()
     party_name_from_clean = str(parsed_json.get('party_name_from') or '').strip().lower()
     party_name_to_clean = str(parsed_json.get('party_name_to') or '').strip().lower()
-    
+
     bill_type = 'none'
     if firm_gstin_clean:
         if gstin_from == firm_gstin_clean:
             bill_type = 'sale'
         elif gstin_to == firm_gstin_clean:
             bill_type = 'purchase'
-            
+
     # Fallback to Name matching if GSTIN did not yield a classification
     if bill_type == 'none' and firm_name_clean:
         if firm_name_clean in party_name_from_clean or party_name_from_clean in firm_name_clean:
             bill_type = 'sale'
         elif firm_name_clean in party_name_to_clean or party_name_to_clean in firm_name_clean:
             bill_type = 'purchase'
-            
+
     parsed_json['bill_type'] = bill_type
 
     # 5. Server-Side Validation Rules Pass (preserve existing extraction warnings)
@@ -551,7 +551,7 @@ def extract_invoice_data(self, bill_id):
     if gstin_from_val:
         if not re.match(gstin_regex, str(gstin_from_val).strip().upper()):
             warnings.append(f"Invalid supplier (From) GSTIN format: '{gstin_from_val}'.")
-            
+
     gstin_to_val = parsed_json.get('gstin_to')
     if gstin_to_val:
         if not re.match(gstin_regex, str(gstin_to_val).strip().upper()):
