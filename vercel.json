@@ -7,7 +7,6 @@
     },
     "api": {
       "root": "ledgerpro_backend",
-      "framework": "django",
       "entrypoint": "ledgerpro_backend.wsgi:app"
     }
   },

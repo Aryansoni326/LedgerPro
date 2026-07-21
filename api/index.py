@@ -2,7 +2,7 @@ import os
 import sys
 from pathlib import Path
 
-# Repo root → ledgerpro_backend on sys.path so Django imports resolve
+# api/ → repo root → ledgerpro_backend
 ROOT = Path(__file__).resolve().parent.parent
 BACKEND = ROOT / "ledgerpro_backend"
 sys.path.insert(0, str(BACKEND))
@@ -16,8 +16,7 @@ from django.core.management import call_command
 app = get_wsgi_application()
 application = app
 
-# Idempotent schema sync on cold start (no separate migrate build step)
 try:
     call_command("migrate", "--noinput", verbosity=0)
-except Exception as exc:  # noqa: BLE001 — never block boot if migrate races
+except Exception as exc:  # noqa: BLE001
     print(f"[ledgerpro] migrate on cold start: {exc}")
