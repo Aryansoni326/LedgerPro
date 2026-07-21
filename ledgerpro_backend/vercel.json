@@ -3,6 +3,10 @@
   "installCommand": "python -m pip install -r requirements.txt",
   "buildCommand": "python manage.py migrate --noinput && python manage.py collectstatic --noinput",
   "functions": {
+    "ledgerpro_backend/asgi.py": {
+      "maxDuration": 60,
+      "memory": 1024
+    },
     "ledgerpro_backend/wsgi.py": {
       "maxDuration": 60,
       "memory": 1024
