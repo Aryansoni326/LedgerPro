@@ -1,2 +1,14 @@
-# Installed for the Django API serverless function on Vercel (same project as Next.js).
--r ledgerpro_backend/requirements.txt
+Django>=5.0,<6.0
+djangorestframework>=3.15.0
+django-environ>=0.11.2
+psycopg2-binary>=2.9.9
+celery[redis]>=5.4.0
+redis>=5.0.0
+django-cors-headers>=4.3.1
+gunicorn>=21.2.0
+whitenoise>=6.6.0
+boto3>=1.34.0
+pandas>=2.2.0
+openpyxl>=3.1.2
+python-dateutil>=2.9.0
+pypdf>=5.0.0
