@@ -30,6 +30,15 @@ SECRET_KEY = env('SECRET_KEY')
 DEBUG = env('DEBUG')
 
 ALLOWED_HOSTS = env('ALLOWED_HOSTS')
+# Platform hostnames (Vercel / Render)
+for _host in (
+    os.environ.get('RENDER_EXTERNAL_HOSTNAME'),
+    os.environ.get('VERCEL_URL'),  # e.g. ledgerpro-api.vercel.app
+):
+    if _host and _host not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(_host)
+if '.vercel.app' not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append('.vercel.app')
 
 # Application definition
 
@@ -60,6 +69,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -108,6 +118,14 @@ else:
             default=f"postgres://{env('DB_USER', default='ledgerpro_user')}:{env('DB_PASSWORD', default='ledgerpro_secure_password')}@{env('DB_HOST', default='db')}:{env('DB_PORT', default='5432')}/{env('DB_NAME', default='ledgerpro_db')}"
         )
     }
+    # Neon and most managed Postgres require SSL
+    _db_url = os.environ.get('DATABASE_URL', '')
+    if 'neon.tech' in _db_url or env.bool('DB_SSL_REQUIRE', default=False):
+        DATABASES['default'].setdefault('OPTIONS', {})
+        DATABASES['default']['OPTIONS'].setdefault('sslmode', 'require')
+    # Avoid stale connections on serverless (Vercel)
+    if os.environ.get('VERCEL') == '1':
+        DATABASES['default']['CONN_MAX_AGE'] = 0
 
 AUTH_USER_MODEL = 'accounts.User'
 
@@ -145,6 +163,14 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+STORAGES = {
+    'default': {
+        'BACKEND': 'django.core.files.storage.FileSystemStorage',
+    },
+    'staticfiles': {
+        'BACKEND': 'whitenoise.storage.CompressedStaticFilesStorage',
+    },
+}
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field
@@ -152,21 +178,53 @@ STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Celery Configurations
+# On Vercel there is no Celery worker — run tasks in-process (eager).
 CELERY_BROKER_URL = env('REDIS_URL', default='redis://redis:6379/0')
 CELERY_RESULT_BACKEND = env('REDIS_URL', default='redis://redis:6379/0')
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = 'UTC'
-CELERY_TASK_ALWAYS_EAGER = USE_SQLITE
+IS_VERCEL = os.environ.get('VERCEL') == '1'
+CELERY_TASK_ALWAYS_EAGER = (
+    USE_SQLITE
+    or IS_VERCEL
+    or env.bool('CELERY_TASK_ALWAYS_EAGER', default=False)
+)
+CELERY_TASK_EAGER_PROPAGATES = True
 
 # Media files (Uploaded invoices/docs)
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
-# CORS Configurations
-CORS_ALLOW_ALL_ORIGINS = True # Allow all in development, restrict for production
+# CORS / CSRF — FRONTEND_URL should be your Vercel frontend URL in production
+FRONTEND_URL = env('FRONTEND_URL', default='http://localhost:3001')
+if DEBUG:
+    CORS_ALLOW_ALL_ORIGINS = True
+else:
+    CORS_ALLOW_ALL_ORIGINS = False
+    CORS_ALLOWED_ORIGINS = [
+        origin.strip()
+        for origin in env.list('CORS_ALLOWED_ORIGINS', default=[FRONTEND_URL])
+        if origin.strip()
+    ]
 CORS_ALLOW_CREDENTIALS = True
+
+_csrf_origins = env.list('CSRF_TRUSTED_ORIGINS', default=[])
+if FRONTEND_URL and FRONTEND_URL not in _csrf_origins:
+    _csrf_origins.append(FRONTEND_URL)
+for _url in (
+    os.environ.get('RENDER_EXTERNAL_URL'),
+    f"https://{os.environ['VERCEL_URL']}" if os.environ.get('VERCEL_URL') else None,
+):
+    if _url and _url not in _csrf_origins:
+        _csrf_origins.append(_url)
+CSRF_TRUSTED_ORIGINS = [o for o in _csrf_origins if o.startswith('http')]
+
+if not DEBUG:
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
 
 # Django REST Framework Settings
 REST_FRAMEWORK = {

@@ -7,6 +7,7 @@ import AddFirmModal from '../components/add-firm-modal';
 import SaasFooter from '../components/saas-footer';
 import LedgerProLogo from '../components/ledgerpro-logo';
 import DashboardNav, { TabType } from '../components/dashboard-nav';
+import { getApiBaseUrl } from '../lib/api-url';
 import {
   BarChart,
   Bar,
@@ -334,7 +335,7 @@ export default function DashboardPage() {
   const getFileUrl = (url: string) => {
     if (!url) return '';
     if (url.startsWith('http')) return url;
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    const apiUrl = getApiBaseUrl();
     return `${apiUrl}${url}`;
   };
 
@@ -456,7 +457,7 @@ export default function DashboardPage() {
     const activeToken = token || localStorage.getItem('auth_token');
     if (!activeToken || !selectedFirm) return;
     setActivityLoading(true);
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    const apiUrl = getApiBaseUrl();
     try {
       const res = await fetch(`${apiUrl}/api/firms/${selectedFirm.id}/activity?limit=150`, {
         headers: {
@@ -494,7 +495,7 @@ export default function DashboardPage() {
     const activeToken = token || localStorage.getItem('auth_token');
     if (!activeToken || !selectedFirm) return;
     if (!options?.silent) setIsLoadingBills(true);
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    const apiUrl = getApiBaseUrl();
     
     const queryParams = new URLSearchParams();
     if (searchQuery) queryParams.append('search', searchQuery);
@@ -526,7 +527,7 @@ export default function DashboardPage() {
   const fetchOverviewBills = async () => {
     const activeToken = token || localStorage.getItem('auth_token');
     if (!activeToken || !selectedFirm) return;
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    const apiUrl = getApiBaseUrl();
 
     try {
       const res = await fetch(`${apiUrl}/api/firms/${selectedFirm.id}/invoices`, {
@@ -608,7 +609,7 @@ export default function DashboardPage() {
     if (!selectedFirm) return;
     setIsLoadingAnalytics(true);
     const activeToken = token || localStorage.getItem('auth_token');
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    const apiUrl = getApiBaseUrl();
     try {
       const [summaryRes, turnoverRes] = await Promise.all([
         fetch(`${apiUrl}/api/firms/${selectedFirm.id}/analytics/summary?range=${range}`, {
@@ -646,7 +647,7 @@ export default function DashboardPage() {
     if (guardReadOnly()) return;
     setIsDeletingBill(true);
     const activeToken = token || localStorage.getItem('auth_token');
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    const apiUrl = getApiBaseUrl();
     try {
       const res = await fetch(`${apiUrl}/api/invoices/${billId}`, {
         method: 'DELETE',
@@ -674,7 +675,7 @@ export default function DashboardPage() {
     if (!selectedFirm) return;
     setIsExporting(true);
     const activeToken = token || localStorage.getItem('auth_token');
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    const apiUrl = getApiBaseUrl();
     try {
       const res = await fetch(`${apiUrl}/api/firms/${selectedFirm.id}/invoices/export-excel`, {
         method: 'POST',
@@ -711,7 +712,7 @@ export default function DashboardPage() {
   const clearDataAndGoToOverview = async (billIds: number[]) => {
     setIsClearingData(true);
     const activeToken = token || localStorage.getItem('auth_token');
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    const apiUrl = getApiBaseUrl();
     
     try {
       if (billIds && billIds.length > 0) {
@@ -768,7 +769,7 @@ export default function DashboardPage() {
     formData.append('excel_file', file);
     
     const activeToken = token || localStorage.getItem('auth_token');
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    const apiUrl = getApiBaseUrl();
     
     try {
       const res = await fetch(`${apiUrl}/api/firms/${selectedFirm.id}/invoices/import-existing-excel`, {
@@ -820,7 +821,7 @@ export default function DashboardPage() {
     if (!selectedFirm) return;
     setIsLoadingVault(true);
     const activeToken = token || localStorage.getItem('auth_token');
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    const apiUrl = getApiBaseUrl();
     try {
       const res = await fetch(`${apiUrl}/api/firms/${selectedFirm.id}/vault/years`, {
         headers: { 'Authorization': `Bearer ${activeToken}` }
@@ -840,7 +841,7 @@ export default function DashboardPage() {
     if (!selectedFirm) return;
     setIsLoadingVault(true);
     const activeToken = token || localStorage.getItem('auth_token');
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    const apiUrl = getApiBaseUrl();
     try {
       const res = await fetch(`${apiUrl}/api/firms/${selectedFirm.id}/vault/${year}/months`, {
         headers: { 'Authorization': `Bearer ${activeToken}` }
@@ -860,7 +861,7 @@ export default function DashboardPage() {
     if (!selectedFirm) return;
     setIsLoadingVault(true);
     const activeToken = token || localStorage.getItem('auth_token');
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    const apiUrl = getApiBaseUrl();
     try {
       const res = await fetch(`${apiUrl}/api/firms/${selectedFirm.id}/vault/${year}/${month}/days`, {
         headers: { 'Authorization': `Bearer ${activeToken}` }
@@ -880,7 +881,7 @@ export default function DashboardPage() {
     if (!selectedFirm) return;
     setIsLoadingVault(true);
     const activeToken = token || localStorage.getItem('auth_token');
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    const apiUrl = getApiBaseUrl();
     const filterQuery = modFilter ? `?module=${modFilter}` : '';
     try {
       const res = await fetch(`${apiUrl}/api/firms/${selectedFirm.id}/vault/${year}/${month}/${day}${filterQuery}`, {
@@ -900,7 +901,7 @@ export default function DashboardPage() {
   const handleDeleteVaultEntry = async (entryId: number) => {
     if (guardReadOnly()) return;
     const activeToken = token || localStorage.getItem('auth_token');
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    const apiUrl = getApiBaseUrl();
     try {
       const res = await fetch(`${apiUrl}/api/vault/${entryId}`, {
         method: 'DELETE',
@@ -929,7 +930,7 @@ export default function DashboardPage() {
     formData.append('module', targetModule);
     
     const activeToken = token || localStorage.getItem('auth_token');
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    const apiUrl = getApiBaseUrl();
     
     setIsStubUploading(true);
     triggerToast(`Uploading document to ${targetModule === 'import_export' ? 'Import-Export' : 'E-Way Bills'}...`);
@@ -967,7 +968,7 @@ export default function DashboardPage() {
       setIsLoadingTradeDocs(true);
     }
     const activeToken = token || localStorage.getItem('auth_token');
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    const apiUrl = getApiBaseUrl();
     try {
       const res = await fetch(`${apiUrl}/api/firms/${selectedFirm.id}/trade-docs`, {
         headers: { 'Authorization': `Bearer ${activeToken}` }
@@ -1042,7 +1043,7 @@ export default function DashboardPage() {
     files.forEach((f) => formData.append('files', f));
 
     const activeToken = token || localStorage.getItem('auth_token');
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    const apiUrl = getApiBaseUrl();
 
     try {
       const res = await fetch(`${apiUrl}/api/firms/${selectedFirm.id}/trade-docs/upload`, {
@@ -1078,7 +1079,7 @@ export default function DashboardPage() {
     setEditingTradeCell(null);
     setSavingTradeDocId(docId);
     const activeToken = token || localStorage.getItem('auth_token');
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    const apiUrl = getApiBaseUrl();
     try {
       const res = await fetch(`${apiUrl}/api/trade-docs/${docId}`, {
         method: 'PATCH',
@@ -1100,7 +1101,7 @@ export default function DashboardPage() {
     if (guardReadOnly()) return;
     setVerifyingTradeDocId(docId);
     const activeToken = token || localStorage.getItem('auth_token');
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    const apiUrl = getApiBaseUrl();
     try {
       const res = await fetch(`${apiUrl}/api/trade-docs/${docId}/verify`, {
         method: 'POST',
@@ -1121,7 +1122,7 @@ export default function DashboardPage() {
   const handleRetryTradeDoc = async (docId: number) => {
     setRetryingTradeDocId(docId);
     const activeToken = token || localStorage.getItem('auth_token');
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    const apiUrl = getApiBaseUrl();
     try {
       const res = await fetch(`${apiUrl}/api/trade-docs/${docId}/retry-extraction`, {
         method: 'POST',
@@ -1144,7 +1145,7 @@ export default function DashboardPage() {
     if (guardReadOnly()) return;
     setIsDeletingTradeDoc(true);
     const activeToken = token || localStorage.getItem('auth_token');
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    const apiUrl = getApiBaseUrl();
     try {
       const res = await fetch(`${apiUrl}/api/trade-docs/${docId}`, {
         method: 'DELETE',
@@ -1172,7 +1173,7 @@ export default function DashboardPage() {
       setIsLoadingEwayBills(true);
     }
     const activeToken = token || localStorage.getItem('auth_token');
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    const apiUrl = getApiBaseUrl();
     try {
       const res = await fetch(`${apiUrl}/api/firms/${selectedFirm.id}/eway-bills`, {
         headers: { 'Authorization': `Bearer ${activeToken}` }
@@ -1214,7 +1215,7 @@ export default function DashboardPage() {
     files.forEach((f) => formData.append('files', f));
 
     const activeToken = token || localStorage.getItem('auth_token');
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    const apiUrl = getApiBaseUrl();
 
     try {
       const res = await fetch(`${apiUrl}/api/firms/${selectedFirm.id}/eway-bills/upload`, {
@@ -1250,7 +1251,7 @@ export default function DashboardPage() {
     setEditingEwayCell(null);
     setSavingEwayBillId(billId);
     const activeToken = token || localStorage.getItem('auth_token');
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    const apiUrl = getApiBaseUrl();
     try {
       const res = await fetch(`${apiUrl}/api/eway-bills/${billId}`, {
         method: 'PUT',
@@ -1274,7 +1275,7 @@ export default function DashboardPage() {
   const handleVerifyEwayBill = async (billId: number) => {
     if (guardReadOnly()) return;
     const activeToken = token || localStorage.getItem('auth_token');
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    const apiUrl = getApiBaseUrl();
     try {
       const res = await fetch(`${apiUrl}/api/eway-bills/${billId}/verify`, {
         method: 'POST',
@@ -1294,7 +1295,7 @@ export default function DashboardPage() {
 
   const handleRetryEwayExtraction = async (billId: number) => {
     const activeToken = token || localStorage.getItem('auth_token');
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    const apiUrl = getApiBaseUrl();
     try {
       const res = await fetch(`${apiUrl}/api/eway-bills/${billId}/retry-extraction`, {
         method: 'POST',
@@ -1315,7 +1316,7 @@ export default function DashboardPage() {
   const handleDeleteEwayBill = async (billId: number) => {
     if (guardReadOnly()) return;
     const activeToken = token || localStorage.getItem('auth_token');
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    const apiUrl = getApiBaseUrl();
     try {
       const res = await fetch(`${apiUrl}/api/eway-bills/${billId}/delete`, {
         method: 'DELETE',
@@ -1334,7 +1335,7 @@ export default function DashboardPage() {
 
   const handleLinkEwayBill = async (billId: number, beNumber: string) => {
     const activeToken = token || localStorage.getItem('auth_token');
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    const apiUrl = getApiBaseUrl();
     try {
       const res = await fetch(`${apiUrl}/api/eway-bills/${billId}`, {
         method: 'PUT',
@@ -1446,7 +1447,7 @@ export default function DashboardPage() {
     });
 
     const activeToken = token || localStorage.getItem('auth_token');
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    const apiUrl = getApiBaseUrl();
 
     try {
       const res = await fetch(`${apiUrl}/api/firms/${selectedFirm.id}/invoices/upload`, {
@@ -1518,7 +1519,7 @@ export default function DashboardPage() {
     }
 
     const activeToken = token || localStorage.getItem('auth_token');
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    const apiUrl = getApiBaseUrl();
     try {
       const res = await fetch(`${apiUrl}/api/invoices/${billId}`, {
         method: 'PATCH',
@@ -1553,7 +1554,7 @@ export default function DashboardPage() {
     if (guardReadOnly()) return;
     setVerifyingBillId(billId);
     const activeToken = token || localStorage.getItem('auth_token');
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    const apiUrl = getApiBaseUrl();
     try {
       const res = await fetch(`${apiUrl}/api/invoices/${billId}/verify`, {
         method: 'POST',
@@ -1582,7 +1583,7 @@ export default function DashboardPage() {
   const handleRetryExtraction = async (billId: number) => {
     setRetryingBillId(billId);
     const activeToken = token || localStorage.getItem('auth_token');
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    const apiUrl = getApiBaseUrl();
     try {
       const res = await fetch(`${apiUrl}/api/invoices/${billId}/retry-extraction`, {
         method: 'POST',

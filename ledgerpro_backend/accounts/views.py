@@ -28,6 +28,13 @@ logger = logging.getLogger(__name__)
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
+def health(request):
+    """Lightweight health check for Render / load balancers."""
+    return Response({'status': 'ok'})
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
 def google_initiate(request):
     """
     Redirect the browser to Google's OAuth 2.0 authorization URL.

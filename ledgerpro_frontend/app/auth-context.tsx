@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
+import { getApiBaseUrl } from './lib/api-url';
 
 interface User {
   email: string;
@@ -103,7 +104,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const fetchFirms = async () => {
     const activeToken = token || localStorage.getItem('auth_token');
     if (!activeToken) return;
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    const apiUrl = getApiBaseUrl();
     try {
       const res = await fetch(`${apiUrl}/api/firms`, {
         method: 'GET',
@@ -142,12 +143,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const initiateGoogleLogin = () => {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    const apiUrl = getApiBaseUrl();
     window.location.href = `${apiUrl}/api/auth/google/initiate`;
   };
 
   const loginWithGoogleCode = async (code: string) => {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    const apiUrl = getApiBaseUrl();
     const res = await fetch(`${apiUrl}/api/auth/google/callback`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -163,7 +164,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const loginWithEmail = async (email: string) => {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    const apiUrl = getApiBaseUrl();
     const res = await fetch(`${apiUrl}/api/auth/email/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -179,7 +180,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const loginAsOwner = async (email: string) => {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    const apiUrl = getApiBaseUrl();
     const res = await fetch(`${apiUrl}/api/auth/owner/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -195,7 +196,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const verifyOTPCode = async (pendingToken: string, code: string) => {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    const apiUrl = getApiBaseUrl();
     const res = await fetch(`${apiUrl}/api/auth/otp/verify`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -222,7 +223,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const resendOTPCode = async (pendingToken: string): Promise<string> => {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    const apiUrl = getApiBaseUrl();
     const res = await fetch(`${apiUrl}/api/auth/otp/resend`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -248,12 +249,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const registerWithGoogle = () => {
     sessionStorage.setItem('auth_flow', 'register');
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    const apiUrl = getApiBaseUrl();
     window.location.href = `${apiUrl}/api/auth/google/initiate`;
   };
 
   const registerWithGoogleCode = async (code: string) => {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    const apiUrl = getApiBaseUrl();
     const res = await fetch(`${apiUrl}/api/auth/register/google`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -265,7 +266,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const registerWithEmail = async (email: string) => {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    const apiUrl = getApiBaseUrl();
     const res = await fetch(`${apiUrl}/api/auth/register/email`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -277,7 +278,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const completeProfile = async (profileData: { registration_token: string; name: string; phone_number: string; pan_number?: string; role: string; location?: string; organization?: string }) => {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    const apiUrl = getApiBaseUrl();
     const res = await fetch(`${apiUrl}/api/auth/register/complete-profile`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

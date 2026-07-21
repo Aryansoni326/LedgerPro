@@ -1,0 +1,2 @@
+# Installed for the Django API serverless function on Vercel (same project as Next.js).
+-r ledgerpro_backend/requirements.txt

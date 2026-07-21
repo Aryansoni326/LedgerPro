@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../auth-context';
+import { getApiBaseUrl } from '../lib/api-url';
 import { X, UploadCloud, CheckCircle2, ShieldCheck, Mail, ArrowRight } from 'lucide-react';
 
 interface AddFirmModalProps {
@@ -111,7 +112,7 @@ export default function AddFirmModal({ isOpen, onClose }: AddFirmModalProps) {
     setLoading(true);
     setError('');
     
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    const apiUrl = getApiBaseUrl();
     try {
       const res = await fetch(`${apiUrl}/api/firms`, {
         method: 'POST',
@@ -160,7 +161,7 @@ export default function AddFirmModal({ isOpen, onClose }: AddFirmModalProps) {
     setLoading(true);
     setError('');
 
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    const apiUrl = getApiBaseUrl();
     try {
       const res = await fetch(`${apiUrl}/api/firms/${firmId}/verify-otp`, {
         method: 'POST',
@@ -213,7 +214,7 @@ export default function AddFirmModal({ isOpen, onClose }: AddFirmModalProps) {
     setLoading(true);
     setError('');
 
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    const apiUrl = getApiBaseUrl();
     try {
       const res = await fetch(`${apiUrl}/api/firms/${firmId}/resend-otp`, {
         method: 'POST',
