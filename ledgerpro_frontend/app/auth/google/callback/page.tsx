@@ -15,7 +15,8 @@ function GoogleCallbackContent() {
     started.current = true;
     const code = searchParams.get('code');
     const error = searchParams.get('error');
-    const authFlow = sessionStorage.getItem('auth_flow');
+    // Google returns `state`; sessionStorage is a fallback for older flows
+    const authFlow = searchParams.get('state') || sessionStorage.getItem('auth_flow');
 
     if (error || !code) {
       router.replace('/login?error=oauth_failed');
@@ -23,7 +24,6 @@ function GoogleCallbackContent() {
     }
 
     if (authFlow === 'register') {
-      // Registration flow
       sessionStorage.removeItem('auth_flow');
       registerWithGoogleCode(code)
         .then((result) => {
@@ -33,7 +33,8 @@ function GoogleCallbackContent() {
           sessionStorage.setItem('registration_avatar', result.avatar || '');
           router.replace('/register?step=profile');
         })
-        .catch(() => {
+        .catch((err: unknown) => {
+          console.error('Google registration failed:', err);
           router.replace('/register?error=registration_failed');
         });
     } else {
@@ -46,7 +47,8 @@ function GoogleCallbackContent() {
             router.replace('/verify-otp');
           }
         })
-        .catch(() => {
+        .catch((err: unknown) => {
+          console.error('Google login failed:', err);
           router.replace('/login?error=oauth_failed');
         });
     }

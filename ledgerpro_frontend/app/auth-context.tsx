@@ -144,7 +144,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const initiateGoogleLogin = () => {
     const apiUrl = getApiBaseUrl();
-    window.location.href = `${apiUrl}/api/auth/google/initiate`;
+    window.location.href = `${apiUrl}/api/auth/google/initiate?flow=login`;
   };
 
   const loginWithGoogleCode = async (code: string) => {
@@ -250,7 +250,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const registerWithGoogle = () => {
     sessionStorage.setItem('auth_flow', 'register');
     const apiUrl = getApiBaseUrl();
-    window.location.href = `${apiUrl}/api/auth/google/initiate`;
+    window.location.href = `${apiUrl}/api/auth/google/initiate?flow=register`;
   };
 
   const registerWithGoogleCode = async (code: string) => {

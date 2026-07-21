@@ -56,6 +56,7 @@ def google_initiate(request):
         'scope': 'openid email profile',
         'access_type': 'offline',
         'prompt': 'select_account',
+        'state': request.GET.get('flow', 'login'),
     })
     google_auth_url = f"https://accounts.google.com/o/oauth2/v2/auth?{params}"
     return HttpResponseRedirect(google_auth_url)
