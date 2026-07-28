@@ -4,6 +4,7 @@
 .env
 .env.*
 !.env.example
+# .env.render is local-only (secrets for Render import) — covered by .env.*
 
 # =============================================================================
 # Python
@@ -66,7 +67,6 @@ yarn-error.log*
 ledgerpro_frontend/.next/
 ledgerpro_frontend/out/
 ledgerpro_frontend/build/
-ledgerpro_frontend/.vercel
 ledgerpro_frontend/*.tsbuildinfo
 
 # =============================================================================

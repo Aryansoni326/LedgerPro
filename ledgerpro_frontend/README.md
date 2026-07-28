@@ -1,6 +1,6 @@
 # LedgerPro Frontend (Next.js)
 
-## Local
+## Local development
 
 ```bash
 npm install
@@ -9,7 +9,10 @@ npm run dev
 
 Docker: http://localhost:3001
 
-## Vercel (one project with backend)
+Set `NEXT_PUBLIC_API_URL` to your API base URL (default `http://localhost:8000`).
 
-Deploy from the **repo root** (see [DEPLOYMENT.md](../DEPLOYMENT.md)).  
-Same domain serves the UI and `/api/*` (Django + Neon).
+## Production (Render)
+
+Deploy with root `render.yaml`. Frontend service uses Root Directory `ledgerpro_frontend`.
+
+See [DEPLOYMENT.md](../DEPLOYMENT.md).
