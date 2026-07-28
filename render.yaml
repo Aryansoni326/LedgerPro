@@ -69,14 +69,15 @@ services:
         value: "True"
       - key: DEFAULT_FROM_EMAIL
         sync: false
+      # Optional — placeholders until Cloudflare R2 is configured
       - key: R2_ACCESS_KEY_ID
-        sync: false
+        value: "unused"
       - key: R2_SECRET_ACCESS_KEY
-        sync: false
+        value: "unused"
       - key: R2_BUCKET_NAME
-        sync: false
+        value: "unused"
       - key: R2_ENDPOINT_URL
-        sync: false
+        value: "unused"
       - key: CELERY_TASK_ALWAYS_EAGER
         value: "False"
 
