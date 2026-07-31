@@ -253,7 +253,7 @@ EMAIL_HOST_USER = env('EMAIL_HOST_USER', default='')
 EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD', default='')
 EMAIL_USE_TLS = env.bool('EMAIL_USE_TLS', default=True)
 EMAIL_USE_SSL = env.bool('EMAIL_USE_SSL', default=False)
-DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default='LedgerPro <noreply@ledgerpro.in>')
+DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default='LedgerPro <noreply@ledgerpro.in>').strip().strip('"').strip("'")
 
 # ── Google OAuth 2.0 ──────────────────────────────────────────────────────────
 # Redirect URI must be the FRONTEND callback page (where Google sends the user),
@@ -266,5 +266,11 @@ GOOGLE_OAUTH_REDIRECT_URI = env(
 )
 
 # Resend API key (optional — only needed if not using SMTP)
-RESEND_API_KEY = env('RESEND_API_KEY', default='')
+# Strip quotes/whitespace — Render dashboard paste often leaves them attached.
+RESEND_API_KEY = env('RESEND_API_KEY', default='').strip().strip('"').strip("'")
 
+# When Resend is configured, clear SMTP so we never fall through to a blocked port.
+if RESEND_API_KEY:
+    EMAIL_HOST = ''
+    EMAIL_HOST_USER = ''
+    EMAIL_HOST_PASSWORD = ''

@@ -31,6 +31,13 @@ from .services import (
 logger = logging.getLogger(__name__)
 
 
+def _otp_delivery_response(exc: OTPDeliveryError) -> Response:
+    """502 with the provider reason included so Resend setup issues are visible in the UI."""
+    detail = str(exc).strip()
+    error = f'{OTP_DELIVERY_MESSAGE} ({detail})' if detail else OTP_DELIVERY_MESSAGE
+    return Response({'error': error, 'detail': detail or None}, status=status.HTTP_502_BAD_GATEWAY)
+
+
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def health(request):
@@ -141,7 +148,7 @@ def google_callback(request):
         return Response({'error': str(ve)}, status=status.HTTP_400_BAD_REQUEST)
     except OTPDeliveryError as e:
         logger.error("OTP delivery failed in google_callback: %s", e)
-        return Response({'error': OTP_DELIVERY_MESSAGE}, status=status.HTTP_502_BAD_GATEWAY)
+        return _otp_delivery_response(e)
     except Exception as e:
         logger.error("Error in google_callback view: %s", e, exc_info=True)
         return Response({'error': 'An unexpected authentication error occurred.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -187,7 +194,7 @@ def email_login(request):
 
     except OTPDeliveryError as e:
         logger.error("OTP delivery failed in email_login: %s", e)
-        return Response({'error': OTP_DELIVERY_MESSAGE}, status=status.HTTP_502_BAD_GATEWAY)
+        return _otp_delivery_response(e)
     except Exception as e:
         logger.error("Error in email_login view: %s", e, exc_info=True)
         return Response({'error': 'Failed to send verification code. Please try again.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -257,7 +264,7 @@ def owner_login(request):
 
     except OTPDeliveryError as e:
         logger.error("OTP delivery failed in owner_login: %s", e)
-        return Response({'error': OTP_DELIVERY_MESSAGE}, status=status.HTTP_502_BAD_GATEWAY)
+        return _otp_delivery_response(e)
     except Exception as e:
         logger.error("Error in owner_login view: %s", e, exc_info=True)
         return Response({'error': 'Failed to send verification code. Please try again.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -387,7 +394,7 @@ def otp_resend(request):
 
     except OTPDeliveryError as e:
         logger.error("OTP delivery failed in otp_resend: %s", e)
-        return Response({'error': OTP_DELIVERY_MESSAGE}, status=status.HTTP_502_BAD_GATEWAY)
+        return _otp_delivery_response(e)
     except Exception as e:
         logger.error("Error in otp_resend view: %s", e, exc_info=True)
         return Response({'error': 'An unexpected error occurred during code resend.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -476,7 +483,7 @@ def register_with_google(request):
         return Response({'error': str(ve)}, status=status.HTTP_400_BAD_REQUEST)
     except OTPDeliveryError as e:
         logger.error("OTP delivery failed in register_with_google: %s", e)
-        return Response({'error': OTP_DELIVERY_MESSAGE}, status=status.HTTP_502_BAD_GATEWAY)
+        return _otp_delivery_response(e)
     except Exception as e:
         logger.error("Error in register_with_google view: %s", e, exc_info=True)
         return Response({'error': 'An unexpected authentication error occurred.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -542,7 +549,7 @@ def register_with_email(request):
 
     except OTPDeliveryError as e:
         logger.error("OTP delivery failed in register_with_email: %s", e)
-        return Response({'error': OTP_DELIVERY_MESSAGE}, status=status.HTTP_502_BAD_GATEWAY)
+        return _otp_delivery_response(e)
     except Exception as e:
         logger.error("Error in register_with_email view: %s", e, exc_info=True)
         return Response({'error': 'An unexpected error occurred during registration.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -622,7 +629,7 @@ def complete_profile(request):
 
     except OTPDeliveryError as e:
         logger.error("OTP delivery failed in complete_profile: %s", e)
-        return Response({'error': OTP_DELIVERY_MESSAGE}, status=status.HTTP_502_BAD_GATEWAY)
+        return _otp_delivery_response(e)
     except Exception as e:
         logger.error("Error in complete_profile view: %s", e, exc_info=True)
         return Response({'error': 'An unexpected error occurred while completing your profile.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

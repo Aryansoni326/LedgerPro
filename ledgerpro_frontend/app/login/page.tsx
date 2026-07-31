@@ -21,7 +21,10 @@ function LoginContent() {
   // Handle errors passed back from Google OAuth redirect
   useEffect(() => {
     const err = searchParams.get('error');
-    if (err === 'oauth_failed') setError('Google sign-in failed. Please try again.');
+    const reason = searchParams.get('reason');
+    if (err === 'oauth_failed') {
+      setError(reason || 'Google sign-in failed. Please try again.');
+    }
     if (err === 'email_not_verified') setError('Your Google email is not verified.');
   }, [searchParams]);
 

@@ -49,7 +49,9 @@ function GoogleCallbackContent() {
         })
         .catch((err: unknown) => {
           console.error('Google login failed:', err);
-          router.replace('/login?error=oauth_failed');
+          const message = err instanceof Error ? err.message : 'oauth_failed';
+          const params = new URLSearchParams({ error: 'oauth_failed', reason: message });
+          router.replace(`/login?${params.toString()}`);
         });
     }
   }, []);

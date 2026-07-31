@@ -96,7 +96,13 @@ def list_create_firms(request):
             OTPService.send_otp_email(owner_email, code)
         except OTPDeliveryError as e:
             logger.error("OTP delivery failed while registering firm %s: %s", firm.id, e)
-            return Response({'error': OTP_DELIVERY_MESSAGE}, status=status.HTTP_502_BAD_GATEWAY)
+            return Response(
+                {
+                    'error': f'{OTP_DELIVERY_MESSAGE} ({e})' if str(e).strip() else OTP_DELIVERY_MESSAGE,
+                    'detail': str(e).strip() or None,
+                },
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
 
         return Response({
             'id': firm.id,
@@ -320,7 +326,13 @@ def resend_firm_otp(request, pk):
 
     except OTPDeliveryError as e:
         logger.error("OTP delivery failed in resend_firm_otp: %s", e)
-        return Response({'error': OTP_DELIVERY_MESSAGE}, status=status.HTTP_502_BAD_GATEWAY)
+        return Response(
+            {
+                'error': f'{OTP_DELIVERY_MESSAGE} ({e})' if str(e).strip() else OTP_DELIVERY_MESSAGE,
+                'detail': str(e).strip() or None,
+            },
+            status=status.HTTP_502_BAD_GATEWAY,
+        )
     except Exception as e:
         logger.error("Error in resend_firm_otp: %s", e, exc_info=True)
         return Response({'error': 'An unexpected error occurred during OTP resending.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
