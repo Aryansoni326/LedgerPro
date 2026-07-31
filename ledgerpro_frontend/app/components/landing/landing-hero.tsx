@@ -50,7 +50,6 @@ export default function LandingHero() {
   return (
     <section className="relative z-10 pt-24 pb-10 md:pt-28 md:pb-14 px-6 md:px-8 lg:px-12 overflow-hidden">
       <div className="absolute inset-0 landing-aurora pointer-events-none" aria-hidden />
-      <div className="absolute inset-0 landing-grid-lines pointer-events-none" aria-hidden />
 
       <div className="relative max-w-3xl mx-auto flex flex-col items-center text-center">
         <motion.span

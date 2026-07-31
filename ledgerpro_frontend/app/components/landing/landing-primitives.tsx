@@ -60,8 +60,8 @@ export function PremiumCard({
       {...hoverLift}
       className={`${colSpan} group premium-card p-6 sm:p-7 flex flex-col hover:border-neutral-400 dark:hover:border-neutral-600 transition-colors duration-300 ${className}`}
     >
-      <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-neutral-200 dark:border-neutral-800 bg-bg-secondary mb-5 group-hover:scale-105 group-hover:border-neutral-400 dark:group-hover:border-neutral-600 transition-all duration-300">
-        <Icon className="w-5 h-5 text-text-secondary group-hover:text-text-primary transition-colors" strokeWidth={1.75} />
+      <span className="mb-5 inline-flex text-text-secondary group-hover:text-text-primary transition-colors duration-300">
+        <Icon className="w-5 h-5" strokeWidth={1.75} />
       </span>
       <h3 className="text-lg font-semibold tracking-tight mb-2 text-text-primary">{title}</h3>
       <p className="text-text-secondary text-sm leading-relaxed flex-1 max-w-[65ch]">{description}</p>

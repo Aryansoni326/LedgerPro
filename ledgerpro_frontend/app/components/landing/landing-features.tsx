@@ -94,7 +94,7 @@ export default function LandingFeatures() {
             </div>
             <div className="h-1 w-full overflow-hidden rounded-full bg-neutral-200/80 dark:bg-neutral-800/80">
               <motion.span
-                className="block h-full rounded-full bg-text-primary/60 group-hover:bg-text-primary transition-colors"
+                className="block h-full rounded-full bg-neutral-800 dark:bg-neutral-200 group-hover:bg-neutral-950 dark:group-hover:bg-white transition-colors"
                 initial={{ width: 0 }}
                 whileInView={{ width: `${feature.fill}%` }}
                 viewport={viewportOnce}

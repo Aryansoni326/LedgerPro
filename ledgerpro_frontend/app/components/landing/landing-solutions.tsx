@@ -73,8 +73,6 @@ const SOLUTIONS = [
 export default function LandingSolutions() {
   return (
     <section id="solutions" className={`${SECTION_SHELL} relative`}>
-      <div className="absolute inset-0 landing-dot-pattern pointer-events-none opacity-40" aria-hidden />
-
       <div className="relative">
         <SectionHeader
           eyebrow="Built for Indian CA firms"

@@ -91,7 +91,7 @@ export function AutoEntryVisual() {
             <span className="text-[10px] text-text-secondary">{row.label}</span>
             <div className="h-2.5 w-full overflow-hidden rounded-full bg-neutral-200/70 dark:bg-neutral-800/70">
               <motion.span
-                className="block h-full rounded-full bg-text-primary/70"
+                className="block h-full rounded-full bg-neutral-800 dark:bg-neutral-200"
                 animate={{ width: i < step ? row.width : '0%' }}
                 transition={{ duration: 0.5, ease: 'easeOut' }}
               />
@@ -156,9 +156,13 @@ export function TurnoverVisual() {
       </div>
       <div className="flex h-[120px] items-end gap-2">
         {bars.map((height, i) => (
-          <motion.span
+          <motion.div
             key={`${pulse}-${i}`}
-            className="flex-1 rounded-t-md bg-gradient-to-t from-text-primary/70 to-text-primary/25"
+            className="flex-1 rounded-t-md bg-neutral-800 dark:bg-neutral-200"
+            style={{
+              backgroundImage:
+                'linear-gradient(to top, var(--text-primary), color-mix(in srgb, var(--text-primary) 35%, transparent))',
+            }}
             initial={{ height: '8%' }}
             animate={{ height: `${height}%` }}
             transition={{ duration: 0.6, delay: i * 0.06, ease: 'easeOut' }}

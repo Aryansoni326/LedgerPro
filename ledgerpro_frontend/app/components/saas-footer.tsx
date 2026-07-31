@@ -68,7 +68,6 @@ export default function SaasFooter({ variant = 'full' }: SaasFooterProps) {
 
   return (
     <footer className="relative overflow-hidden bg-neutral-50 dark:bg-neutral-950 text-text-primary transition-colors duration-200 border-t border-neutral-200 dark:border-neutral-800">
-      <div className="absolute inset-0 landing-dot-pattern pointer-events-none opacity-40" aria-hidden />
 
       <div className="relative max-w-6xl mx-auto px-6 md:px-8 lg:px-12 pt-16 pb-10">
         <div className="grid gap-10 lg:gap-12 lg:grid-cols-[1.4fr_2.6fr] mb-12">

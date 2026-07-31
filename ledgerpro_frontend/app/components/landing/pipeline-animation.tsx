@@ -76,12 +76,10 @@ export default function PipelineAnimation() {
               <motion.span
                 animate={{
                   scale: isActive ? 1.06 : 1,
-                  borderColor: isActive
-                    ? 'color-mix(in srgb, var(--text-primary) 55%, transparent)'
-                    : 'color-mix(in srgb, var(--text-primary) 14%, transparent)',
+                  opacity: isActive || isDone ? 1 : 0.45,
                 }}
                 transition={{ duration: 0.3 }}
-                className="relative flex h-10 w-10 items-center justify-center rounded-xl border bg-bg-secondary"
+                className="relative flex h-8 w-8 items-center justify-center"
               >
                 {isDone ? (
                   <Check className="w-4 h-4 text-text-primary" strokeWidth={2.25} />
@@ -94,7 +92,7 @@ export default function PipelineAnimation() {
                 {isActive && (
                   <motion.span
                     layoutId="pipeline-halo"
-                    className="absolute inset-0 rounded-xl ring-glow"
+                    className="absolute inset-0 rounded-full ring-glow"
                     aria-hidden
                   />
                 )}
@@ -162,10 +160,8 @@ export default function PipelineAnimation() {
         </div>
       </div>
 
-      <div className="mt-5 flex items-center gap-3 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-bg-secondary/50 px-4 py-3">
-        <span className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-neutral-200 dark:border-neutral-800 bg-bg-primary">
-          <active.icon className="w-4 h-4 text-text-primary" strokeWidth={1.75} />
-        </span>
+      <div className="mt-5 flex items-center gap-3 px-1 py-2">
+        <active.icon className="w-4 h-4 shrink-0 text-text-primary" strokeWidth={1.75} />
         <AnimatePresence mode="wait">
           <motion.p
             key={active.key}

@@ -62,7 +62,6 @@ function CountUp({ value, suffix, decimals = 0 }: { value: number; suffix: strin
 export default function LandingProblem() {
   return (
     <section id="why" className={`${SECTION_SHELL} relative`}>
-      <div className="absolute inset-0 landing-dot-pattern pointer-events-none opacity-40" aria-hidden />
 
       <div className="relative">
         <SectionHeader

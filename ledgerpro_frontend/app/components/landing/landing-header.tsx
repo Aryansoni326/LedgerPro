@@ -51,7 +51,7 @@ export default function LandingHeader() {
         <div className="hidden md:flex items-center gap-4">
           <button
             onClick={toggleTheme}
-            className="p-2 rounded-lg border border-neutral-200 dark:border-neutral-800 hover:bg-bg-secondary hover:shadow-[0_0_20px_var(--brand-glow)] transition-all"
+            className="p-2 text-text-secondary hover:text-text-primary transition-colors"
             aria-label="Toggle theme"
           >
             {theme === 'light' ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
@@ -78,14 +78,14 @@ export default function LandingHeader() {
         <div className="flex items-center gap-3 md:hidden">
           <button
             onClick={toggleTheme}
-            className="p-2 rounded-lg border border-neutral-200 dark:border-neutral-800 hover:shadow-[0_0_20px_var(--brand-glow)] transition-all"
+            className="p-2 text-text-secondary hover:text-text-primary transition-colors"
             aria-label="Toggle theme"
           >
             {theme === 'light' ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
           </button>
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="p-2 rounded-lg border border-neutral-200 dark:border-neutral-800"
+            className="p-2 text-text-secondary hover:text-text-primary transition-colors"
             aria-label="Toggle menu"
           >
             {mobileMenuOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
