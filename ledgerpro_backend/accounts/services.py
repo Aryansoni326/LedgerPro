@@ -250,6 +250,9 @@ class OTPService:
             headers={
                 'Authorization': f'Bearer {api_key}',
                 'Content-Type': 'application/json',
+                # Resend sits behind Cloudflare — requests with no User-Agent
+                # are rejected with HTTP 403 / error code 1010 before the API runs.
+                'User-Agent': 'LedgerPro/1.0 (+https://ledgerpro.store)',
             },
             method='POST',
         )
