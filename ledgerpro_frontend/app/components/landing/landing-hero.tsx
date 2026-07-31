@@ -48,7 +48,7 @@ export default function LandingHero() {
   const currentQuote = ANIMATED_QUOTES[quoteIndex];
 
   return (
-    <section className="relative z-10 pt-24 pb-14 md:pt-28 md:pb-20 px-6 md:px-8 lg:px-12 overflow-hidden">
+    <section className="relative z-10 pt-24 pb-10 md:pt-28 md:pb-14 px-6 md:px-8 lg:px-12 overflow-hidden">
       <div className="absolute inset-0 landing-aurora pointer-events-none" aria-hidden />
       <div className="absolute inset-0 landing-grid-lines pointer-events-none" aria-hidden />
 
@@ -57,7 +57,7 @@ export default function LandingHero() {
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4 }}
-          className="hero-badge mb-8"
+          className="hero-badge mb-6"
         >
           <span className="hero-badge-dot" aria-hidden />
           For Indian CA firms
@@ -73,16 +73,7 @@ export default function LandingHero() {
           <span className="block hero-headline-sub">for Indian CA firms & accountants.</span>
         </motion.h1>
 
-        <motion.p
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.45, delay: 0.12 }}
-          className="hero-tagline mb-6"
-        >
-          Ledger automation for your practice.
-        </motion.p>
-
-        <div className="relative h-10 sm:h-11 w-full max-w-xl mb-6 overflow-hidden">
+        <div className="relative h-10 sm:h-11 w-full max-w-xl mt-5 mb-5 overflow-hidden">
           <AnimatePresence mode="wait">
             <motion.p
               key={currentQuote}
@@ -128,7 +119,7 @@ export default function LandingHero() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.4, duration: 0.4 }}
-          className="text-[11px] uppercase tracking-[0.18em] text-text-secondary/80 mb-8 font-medium"
+          className="text-[11px] uppercase tracking-[0.18em] text-text-secondary/80 mb-7 font-medium"
         >
           14-day trial · No card · GST-compliant
         </motion.p>
@@ -137,7 +128,7 @@ export default function LandingHero() {
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.45, delay: 0.32 }}
-          className="grid grid-cols-3 gap-3 w-full max-w-xl mb-10"
+          className="grid grid-cols-3 gap-3 w-full max-w-xl mb-8"
         >
           {HERO_STATS.map((stat) => (
             <li
@@ -175,7 +166,7 @@ export default function LandingHero() {
         </div>
       </motion.div>
 
-      <div className="relative max-w-5xl mx-auto mt-12">
+      <div className="relative max-w-5xl mx-auto mt-10">
         <p className="text-center text-[11px] uppercase tracking-[0.18em] text-text-secondary mb-4">
           Works with the tools your practice already runs on
         </p>

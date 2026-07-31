@@ -2,45 +2,58 @@
 
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Cpu, FileCheck, Globe, CheckCircle2, BarChart3 } from 'lucide-react';
-import { SectionHeader, PremiumCard, SECTION_SHELL } from './landing-primitives';
-import { staggerContainer, viewportOnce } from './landing-motion';
+import { Cpu, FileCheck, Globe, CheckCircle2, BarChart3, Lock } from 'lucide-react';
+import { SectionHeader, SECTION_SHELL } from './landing-primitives';
+import { viewportOnce } from './landing-motion';
 
 const FEATURES = [
   {
-    span: 'md:col-span-2 lg:col-span-4 xl:col-span-4',
     icon: Cpu,
-    title: 'LLM Invoice Extraction',
-    desc: 'Reads structured tables, handwritten bills, and multi-currency values. Maps raw rows to inventory SKUs with zero templates.',
-    foot: '99.8% extraction accuracy',
+    title: 'LLM invoice extraction',
+    desc: 'Structured tables, handwriting and multi-currency values mapped without templates.',
+    metric: 'Accuracy',
+    fill: 99,
+    value: '99.8%',
   },
   {
-    span: 'md:col-span-1 lg:col-span-2 xl:col-span-2',
     icon: FileCheck,
-    title: 'GST Verification',
-    desc: 'Validates vendor GSTIN status, tax slab rules, and match claims in real time.',
-    foot: 'Tax reconciliation',
+    title: 'GST verification',
+    desc: 'Vendor GSTIN status, slab rules and ITC claims validated in real time.',
+    metric: 'Checks per bill',
+    fill: 84,
+    value: '12',
   },
   {
-    span: 'md:col-span-1 lg:col-span-2 xl:col-span-2',
     icon: Globe,
-    title: 'Import-Export tracking',
-    desc: 'Bills of entry and shipping details matched to verify tax rates and logistics data.',
-    foot: 'Cross-border invoicing',
+    title: 'Import-export tracking',
+    desc: 'Bills of entry and shipping details matched against declared tax rates.',
+    metric: 'Docs automated',
+    fill: 72,
+    value: '14k+',
   },
   {
-    span: 'md:col-span-1 lg:col-span-2 xl:col-span-2',
     icon: CheckCircle2,
-    title: 'E-Way Bills',
-    desc: 'Verify transport distances, generate vehicle details, and submit registry files in seconds.',
-    foot: 'Compliance check',
+    title: 'E-way bills',
+    desc: 'Transport distance, vehicle details and registry files generated in seconds.',
+    metric: 'Generation time',
+    fill: 91,
+    value: '8 sec',
   },
   {
-    span: 'md:col-span-1 lg:col-span-2 xl:col-span-2',
     icon: BarChart3,
-    title: 'Turnover Analytics',
-    desc: 'Instant cashflow analysis, tax projections, and billing anomaly detection.',
-    foot: 'Real-time reports',
+    title: 'Turnover analytics',
+    desc: 'Cashflow analysis, tax projections and billing anomaly detection.',
+    metric: 'Refresh',
+    fill: 96,
+    value: 'Live',
+  },
+  {
+    icon: Lock,
+    title: 'Secure document vault',
+    desc: 'Year-wise archive per firm with encrypted storage and role-based access.',
+    metric: 'Retention',
+    fill: 88,
+    value: '8 yrs',
   },
 ];
 
@@ -49,29 +62,48 @@ export default function LandingFeatures() {
     <section id="features" className={`${SECTION_SHELL} bg-bg-secondary/30`}>
       <SectionHeader
         eyebrow="Capabilities"
-        title="Built for high accuracy"
-        description="Robust tools for complex corporate invoicing and tax auditing."
+        title="Engineered for accuracy"
+        description="The engine behind every workflow — precise, auditable and built for complex Indian corporate invoicing."
       />
 
-      <motion.div
-        initial="hidden"
-        whileInView="visible"
-        viewport={viewportOnce}
-        variants={staggerContainer}
-        className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 xl:grid-cols-6 gap-6 lg:gap-8"
-      >
-        {FEATURES.map((card, i) => (
-          <PremiumCard
-            key={card.title}
-            icon={card.icon}
-            title={card.title}
-            description={card.desc}
-            footer={card.foot}
-            colSpan={card.span}
-            className={i === 0 ? '' : ''}
-          />
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-px overflow-hidden rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-neutral-200 dark:bg-neutral-800">
+        {FEATURES.map((feature, i) => (
+          <motion.div
+            key={feature.title}
+            initial={{ opacity: 0, y: 16 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={viewportOnce}
+            transition={{ duration: 0.45, delay: i * 0.06 }}
+            className="group relative bg-bg-primary p-6 transition-colors duration-300 hover:bg-bg-secondary/60"
+          >
+            <div className="flex items-start gap-3 mb-3">
+              <feature.icon
+                className="w-[18px] h-[18px] mt-0.5 text-text-secondary group-hover:text-text-primary transition-colors"
+                strokeWidth={1.75}
+              />
+              <h3 className="text-sm font-semibold tracking-tight text-text-primary">{feature.title}</h3>
+            </div>
+
+            <p className="text-sm text-text-secondary leading-relaxed mb-5 max-w-[46ch]">{feature.desc}</p>
+
+            <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.16em] text-text-secondary mb-2">
+              <span>{feature.metric}</span>
+              <span className="text-text-primary font-semibold tabular-nums normal-case tracking-normal text-xs">
+                {feature.value}
+              </span>
+            </div>
+            <div className="h-1 w-full overflow-hidden rounded-full bg-neutral-200/80 dark:bg-neutral-800/80">
+              <motion.span
+                className="block h-full rounded-full bg-text-primary/60 group-hover:bg-text-primary transition-colors"
+                initial={{ width: 0 }}
+                whileInView={{ width: `${feature.fill}%` }}
+                viewport={viewportOnce}
+                transition={{ duration: 0.8, delay: 0.2 + i * 0.06, ease: 'easeOut' }}
+              />
+            </div>
+          </motion.div>
         ))}
-      </motion.div>
+      </div>
     </section>
   );
 }

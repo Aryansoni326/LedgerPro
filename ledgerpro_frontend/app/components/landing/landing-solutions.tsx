@@ -1,106 +1,124 @@
 'use client';
 
 import React from 'react';
-import { LANDING_PHOTOS } from './landing-photos';
-import { SectionHeader, SolutionRow, SECTION_SHELL } from './landing-primitives';
+import { motion } from 'framer-motion';
+import { SectionHeader, SECTION_SHELL } from './landing-primitives';
+import { fadeUp, hoverLift, viewportOnce } from './landing-motion';
+import {
+  FirmSwitchVisual,
+  AutoEntryVisual,
+  GstCheckVisual,
+  TurnoverVisual,
+  ExtractVisual,
+  VerifyVisual,
+} from './solution-visuals';
 
 const SOLUTIONS = [
   {
     eyebrow: 'Multi-firm workspace',
-    title: 'Manage every client firm from one dashboard',
+    title: 'Every client firm in one place',
     description:
-      'Running multiple billing entities is essential for CA practices. Add unlimited client firms, switch workspaces instantly, and keep every firm\'s invoices, vault, and GST data fully isolated.',
-    bullets: [
-      'OTP-secured firm onboarding',
-      'Switch firms without logging out',
-      'Firm-level data isolation with roles',
-    ],
-    image: LANDING_PHOTOS.solutions.multiFirm,
-    imageAlt: 'CA firm team collaborating on client accounts',
-    imagePosition: 'right' as const,
+      'Add unlimited client firms, switch workspaces instantly, and keep each firm’s invoices, vault and GST data fully isolated.',
+    bullets: ['OTP-secured onboarding', 'Switch without logging out', 'Role-based isolation'],
+    Visual: FirmSwitchVisual,
+    span: 'lg:col-span-3',
   },
   {
     eyebrow: 'Zero manual entry',
-    title: 'Stop retyping invoices | work hassle-free',
+    title: 'Stop retyping invoices',
     description:
-      'Upload purchase and sales bills in bulk. AI extracts vendor details, GST breakup, and line items automatically so your staff focuses on review, not data entry.',
-    image: LANDING_PHOTOS.solutions.invoices,
-    imageAlt: 'Purchase invoices and receipts on desk',
-    imagePosition: 'left' as const,
+      'Upload purchase and sales bills in bulk. Vendor details, GST breakup and line items are captured for you.',
+    bullets: ['Bulk upload', 'No templates to build'],
+    Visual: AutoEntryVisual,
+    span: 'lg:col-span-3',
   },
   {
     eyebrow: 'Compliance automation',
-    title: 'Fully automated GST & document workflow',
+    title: 'GST checks that run themselves',
     description:
-      'Automate GST validation, import-export matching, e-way bill tracking, and audit-ready exports | the recurring work that eats 90% of your team\'s week.',
-    bullets: [
-      'Auto GSTIN validation against government records',
-      'GSTR-ready purchase vs sales reconciliation',
-      'E-way bill linking and cloud vault archive',
-    ],
-    image: LANDING_PHOTOS.solutions.gst,
-    imageAlt: 'GST tax forms and calculator on desk',
-    imagePosition: 'right' as const,
-  },
-  {
-    eyebrow: 'Team productivity',
-    title: 'Small team, more output',
-    description:
-      'See verified bills, firms needing attention, and turnover trends across purchase and sales | all from the overview tab. Handle more clients without hiring.',
-    image: LANDING_PHOTOS.solutions.analytics,
-    imageAlt: 'Accountant reviewing firm turnover and productivity metrics on screen',
-    imagePosition: 'left' as const,
+      'GSTIN status, tax slabs, ITC eligibility and e-way bill links are validated the moment a bill enters the system.',
+    bullets: ['Government record checks', 'GSTR-ready reconciliation'],
+    Visual: GstCheckVisual,
+    span: 'lg:col-span-2',
   },
   {
     eyebrow: 'AI extraction',
-    title: 'Automate invoice extraction',
+    title: 'Reads what your team would',
     description:
-      'Upload PDFs or images once. LedgerPro extracts line items, tax fields, and vendor metadata, then routes bills through your verification workflow.',
-    bullets: [
-      'Bulk upload for purchase and sales invoices',
-      'AI extraction for tables, handwriting, and multi-page PDFs',
-      'One-click export to Tally, Excel, or GSTR',
-    ],
-    image: LANDING_PHOTOS.solutions.extract,
-    imageAlt: 'Accountant scanning and digitizing invoices for AI extraction',
-    imagePosition: 'right' as const,
+      'Tables, handwriting and multi-page PDFs are parsed into structured fields, then routed through your verification flow.',
+    bullets: ['Handwriting and scans', 'Multi-page documents'],
+    Visual: ExtractVisual,
+    span: 'lg:col-span-2',
   },
   {
     eyebrow: 'Bill verification',
-    title: 'Verify bills like a pro',
+    title: 'Approve with an audit trail',
     description:
-      'Review extracted data side-by-side with originals. Approve bills, flag mismatches, and maintain a complete audit trail for every action.',
-    image: LANDING_PHOTOS.solutions.verify,
-    imageAlt: 'Professional reviewing GST bills for approval',
-    imagePosition: 'left' as const,
+      'Review extracted data against the original bill, approve in one click, and keep a record of every action taken.',
+    bullets: ['Side-by-side review', 'Full action history'],
+    Visual: VerifyVisual,
+    span: 'lg:col-span-2',
   },
-];
+  {
+    eyebrow: 'Practice analytics',
+    title: 'See the whole practice at a glance',
+    description:
+      'Track verified bills, firms needing attention and turnover trends across purchase and sales from a single overview.',
+    bullets: ['Live turnover trends', 'Attention queue per firm'],
+    Visual: TurnoverVisual,
+    span: 'lg:col-span-6',
+  },
+] as const;
 
 export default function LandingSolutions() {
   return (
-    <section id="solutions" className="relative z-10">
-      <div className="absolute inset-0 landing-dot-pattern pointer-events-none opacity-60" aria-hidden />
-      <div className={SECTION_SHELL}>
+    <section id="solutions" className={`${SECTION_SHELL} relative`}>
+      <div className="absolute inset-0 landing-dot-pattern pointer-events-none opacity-40" aria-hidden />
+
+      <div className="relative">
         <SectionHeader
           eyebrow="Built for Indian CA firms"
           title="Solutions that solve real practice problems"
-          description="From multi-client billing to GST compliance | LedgerPro replaces spreadsheets and manual follow-ups with one intelligent workspace."
+          description="From multi-client billing to GST compliance, LedgerPro replaces spreadsheets and manual follow-ups with one intelligent workspace."
         />
 
-        {SOLUTIONS.map((item, i) => (
-          <SolutionRow
-            key={item.title}
-            index={i}
-            eyebrow={item.eyebrow}
-            title={item.title}
-            description={item.description}
-            bullets={item.bullets}
-            imageSrc={item.image}
-            imageAlt={item.imageAlt}
-            imagePosition={item.imagePosition}
-            layout="split"
-          />
-        ))}
+        <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-6">
+          {SOLUTIONS.map((item, i) => (
+            <motion.article
+              key={item.title}
+              initial="hidden"
+              whileInView="visible"
+              viewport={viewportOnce}
+              variants={fadeUp}
+              custom={i * 0.08}
+              {...hoverLift}
+              className={`${item.span} premium-card p-5 sm:p-6 flex flex-col gap-5 hover:border-neutral-400 dark:hover:border-neutral-600 transition-colors duration-300`}
+            >
+              <item.Visual />
+
+              <div>
+                <span className="badge-pill mb-3">{item.eyebrow}</span>
+                <h3 className="text-lg sm:text-xl font-semibold tracking-tight text-text-primary mb-2">
+                  {item.title}
+                </h3>
+                <p className="text-sm text-text-secondary leading-relaxed max-w-[60ch]">
+                  {item.description}
+                </p>
+                <ul className="mt-4 flex flex-wrap gap-2">
+                  {item.bullets.map((bullet) => (
+                    <li
+                      key={bullet}
+                      className="inline-flex items-center gap-2 rounded-full border border-neutral-200 dark:border-neutral-800 bg-bg-secondary/50 px-3 py-1 text-[11px] text-text-secondary"
+                    >
+                      <span className="h-1 w-1 rounded-full bg-text-primary" aria-hidden />
+                      {bullet}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </motion.article>
+          ))}
+        </div>
       </div>
     </section>
   );

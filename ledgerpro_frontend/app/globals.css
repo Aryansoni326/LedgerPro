@@ -44,7 +44,7 @@ body {
 
 @layer components {
   .landing-section {
-    @apply relative z-10 py-12 md:py-16 px-6 md:px-8 lg:px-12;
+    @apply relative z-10 py-10 md:py-14 px-6 md:px-8 lg:px-12;
   }
 
   .landing-container {
@@ -93,8 +93,9 @@ body {
   }
 
   .hero-badge-dot {
-    @apply w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0;
-    box-shadow: 0 0 0 3px rgb(16 185 129 / 0.15);
+    @apply w-1.5 h-1.5 rounded-full shrink-0;
+    background-color: var(--text-primary);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--text-primary) 14%, transparent);
     animation: hero-pulse 2.4s ease-in-out infinite;
   }
 
@@ -183,17 +184,17 @@ body {
 /* ── Landing atmosphere ─────────────────────────────────────────────────── */
 .landing-aurora {
   background-image:
-    radial-gradient(ellipse 70% 45% at 15% 0%, rgba(16, 185, 129, 0.1), transparent 60%),
-    radial-gradient(ellipse 60% 45% at 85% 5%, rgba(59, 130, 246, 0.09), transparent 60%),
-    radial-gradient(ellipse 80% 50% at 50% 100%, rgba(0, 0, 0, 0.05), transparent 65%);
+    radial-gradient(ellipse 70% 45% at 15% 0%, rgba(0, 0, 0, 0.07), transparent 60%),
+    radial-gradient(ellipse 60% 45% at 85% 5%, rgba(0, 0, 0, 0.05), transparent 60%),
+    radial-gradient(ellipse 80% 50% at 50% 100%, rgba(0, 0, 0, 0.04), transparent 65%);
   animation: aurora-drift 22s ease-in-out infinite alternate;
 }
 
 html.dark .landing-aurora {
   background-image:
-    radial-gradient(ellipse 70% 45% at 15% 0%, rgba(16, 185, 129, 0.14), transparent 60%),
-    radial-gradient(ellipse 60% 45% at 85% 5%, rgba(59, 130, 246, 0.14), transparent 60%),
-    radial-gradient(ellipse 80% 50% at 50% 100%, rgba(255, 255, 255, 0.05), transparent 65%);
+    radial-gradient(ellipse 70% 45% at 15% 0%, rgba(255, 255, 255, 0.07), transparent 60%),
+    radial-gradient(ellipse 60% 45% at 85% 5%, rgba(255, 255, 255, 0.05), transparent 60%),
+    radial-gradient(ellipse 80% 50% at 50% 100%, rgba(255, 255, 255, 0.04), transparent 65%);
 }
 
 .landing-grid-lines {
