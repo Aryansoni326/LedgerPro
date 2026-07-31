@@ -160,6 +160,151 @@ body {
   .btn-secondary {
     @apply inline-flex items-center justify-center gap-2 px-6 py-3 rounded-lg text-sm font-medium border border-neutral-200 dark:border-neutral-800 bg-bg-primary hover:bg-neutral-50 dark:hover:bg-neutral-900 transition-all active:scale-[0.98];
   }
+
+  .surface-panel {
+    @apply rounded-2xl border border-neutral-200/80 dark:border-neutral-800/80 backdrop-blur-xl;
+    background-color: color-mix(in srgb, var(--bg-primary) 72%, transparent);
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.04), 0 12px 40px rgb(0 0 0 / 0.05);
+  }
+
+  html.dark .surface-panel {
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 12px 40px rgb(0 0 0 / 0.4);
+  }
+
+  .stat-figure {
+    @apply text-3xl md:text-4xl font-semibold tracking-tight tabular-nums text-text-primary;
+  }
+
+  .eyebrow-line {
+    @apply inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-text-secondary;
+  }
+}
+
+/* ── Landing atmosphere ─────────────────────────────────────────────────── */
+.landing-aurora {
+  background-image:
+    radial-gradient(ellipse 70% 45% at 15% 0%, rgba(16, 185, 129, 0.1), transparent 60%),
+    radial-gradient(ellipse 60% 45% at 85% 5%, rgba(59, 130, 246, 0.09), transparent 60%),
+    radial-gradient(ellipse 80% 50% at 50% 100%, rgba(0, 0, 0, 0.05), transparent 65%);
+  animation: aurora-drift 22s ease-in-out infinite alternate;
+}
+
+html.dark .landing-aurora {
+  background-image:
+    radial-gradient(ellipse 70% 45% at 15% 0%, rgba(16, 185, 129, 0.14), transparent 60%),
+    radial-gradient(ellipse 60% 45% at 85% 5%, rgba(59, 130, 246, 0.14), transparent 60%),
+    radial-gradient(ellipse 80% 50% at 50% 100%, rgba(255, 255, 255, 0.05), transparent 65%);
+}
+
+.landing-grid-lines {
+  background-image:
+    linear-gradient(to right, rgb(115 115 115 / 0.09) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(115 115 115 / 0.09) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: radial-gradient(ellipse 70% 60% at 50% 30%, #000 35%, transparent 78%);
+  -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 30%, #000 35%, transparent 78%);
+}
+
+.section-divider-glow {
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--text-primary) 18%, transparent),
+    transparent
+  );
+}
+
+.marquee-mask {
+  mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
+}
+
+.marquee-track {
+  display: flex;
+  width: max-content;
+  animation: marquee-scroll 32s linear infinite;
+}
+
+.marquee-mask:hover .marquee-track {
+  animation-play-state: paused;
+}
+
+.beam-line {
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--text-primary) 45%, transparent),
+    transparent
+  );
+  background-size: 200% 100%;
+  animation: beam-sweep 2.6s linear infinite;
+}
+
+.scan-sweep::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    color-mix(in srgb, var(--text-primary) 8%, transparent) 45%,
+    color-mix(in srgb, var(--text-primary) 14%, transparent) 50%,
+    transparent 100%
+  );
+  animation: scan-move 3.2s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.ring-glow {
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--text-primary) 10%, transparent),
+    0 18px 60px color-mix(in srgb, var(--text-primary) 10%, transparent);
+}
+
+@keyframes aurora-drift {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  100% {
+    transform: translate3d(0, -1.5%, 0) scale(1.06);
+  }
+}
+
+@keyframes marquee-scroll {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+
+@keyframes beam-sweep {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@keyframes scan-move {
+  0%,
+  100% {
+    transform: translateY(-100%);
+  }
+  50% {
+    transform: translateY(100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-aurora,
+  .marquee-track,
+  .beam-line,
+  .scan-sweep::after {
+    animation: none !important;
+  }
 }
 
 .landing-gradient-mesh {

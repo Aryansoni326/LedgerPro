@@ -6,10 +6,12 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from './auth-context';
 import LandingHeader from './components/landing/landing-header';
 import LandingHero from './components/landing/landing-hero';
+import LandingProblem from './components/landing/landing-problem';
 import LandingSolutions from './components/landing/landing-solutions';
 import LandingTestimonials from './components/landing/landing-testimonials';
 import LandingHowItWorks from './components/landing/landing-how-it-works';
 import LandingFeatures from './components/landing/landing-features';
+import LandingCta from './components/landing/landing-cta';
 import SaasFooter from './components/saas-footer';
 
 export default function Home() {
@@ -26,7 +28,10 @@ export default function Home() {
     return null;
   }
   return (
-    <div className="min-h-screen bg-bg-primary text-text-primary transition-colors duration-300 overflow-x-hidden font-sans relative">
+    <div
+      id="top"
+      className="min-h-screen bg-bg-primary text-text-primary transition-colors duration-300 overflow-x-hidden font-sans relative"
+    >
       <div className="fixed inset-0 landing-gradient-mesh pointer-events-none z-0" aria-hidden />
       <motion.div
         className="fixed top-20 left-[10%] w-72 h-72 rounded-full bg-neutral-900/[0.03] dark:bg-neutral-100/[0.03] blur-3xl pointer-events-none z-0"
@@ -43,10 +48,12 @@ export default function Home() {
 
       <LandingHeader />
       <LandingHero />
-      <LandingSolutions />
-      <LandingTestimonials />
+      <LandingProblem />
       <LandingHowItWorks />
+      <LandingSolutions />
       <LandingFeatures />
+      <LandingTestimonials />
+      <LandingCta />
       <SaasFooter variant="full" />
     </div>
   );
