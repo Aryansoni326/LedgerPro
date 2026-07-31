@@ -142,13 +142,8 @@ class OTPService:
         verification.save(update_fields=['otp_hash'])
         return verification, code
 
-    @classmethod
-    def send_otp_email(cls, email: str, code: str):
-        """
-        Send the OTP code via Django SMTP.
-        Falls back to console logging only when EMAIL_HOST / EMAIL_HOST_USER are not set
-        (i.e. in development without SMTP credentials).
-        """
+    @staticmethod
+    def _build_otp_email(code: str) -> tuple[str, str, str]:
         subject = "LedgerPro — Your Sign-In Verification Code"
         html_content = f"""<!DOCTYPE html>
 <html>
@@ -212,6 +207,59 @@ class OTPService:
             f"This code expires in 5 minutes.\n"
             f"If you did not request this, please ignore this email."
         )
+        return subject, html_content, plain_text
+
+    @staticmethod
+    def _parse_from_email(value: str) -> tuple[str, str]:
+        if '<' in value and '>' in value:
+            name, email = value.rsplit('<', 1)
+            return name.strip().strip('"'), email.replace('>', '').strip()
+        return 'LedgerPro', value.strip()
+
+    @classmethod
+    def _send_via_resend(cls, email: str, subject: str, html_content: str, plain_text: str) -> bool:
+        api_key = getattr(settings, 'RESEND_API_KEY', '').strip()
+        from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', 'LedgerPro <noreply@ledgerpro.in>')
+        if not api_key:
+            return False
+
+        from_name, from_address = cls._parse_from_email(from_email)
+        payload = {
+            'from': f'{from_name} <{from_address}>',
+            'to': [email],
+            'subject': subject,
+            'html': html_content,
+            'text': plain_text,
+        }
+
+        req = urllib.request.Request(
+            'https://api.resend.com/emails',
+            data=json.dumps(payload).encode('utf-8'),
+            headers={
+                'Authorization': f'Bearer {api_key}',
+                'Content-Type': 'application/json',
+            },
+            method='POST',
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=15) as response:
+                response_body = response.read().decode('utf-8')
+                response_data = json.loads(response_body) if response_body else {}
+                logger.info("OTP email sent to %s via Resend (id=%s).", email, response_data.get('id'))
+                return True
+        except Exception as e:
+            logger.error("Resend send failed for %s: %s", email, e, exc_info=True)
+            raise RuntimeError(f"Failed to send OTP email via Resend: {e}") from e
+
+    @classmethod
+    def send_otp_email(cls, email: str, code: str):
+        """
+        Send the OTP code via Resend, then SMTP, then console fallback.
+        """
+        subject, html_content, plain_text = cls._build_otp_email(code)
+
+        if cls._send_via_resend(email, subject, html_content, plain_text):
+            return
 
         smtp_host = getattr(settings, 'EMAIL_HOST', None)
         smtp_user = getattr(settings, 'EMAIL_HOST_USER', None)

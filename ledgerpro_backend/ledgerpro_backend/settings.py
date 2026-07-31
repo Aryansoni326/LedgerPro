@@ -29,13 +29,21 @@ SECRET_KEY = env('SECRET_KEY')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env('DEBUG')
 
-ALLOWED_HOSTS = env('ALLOWED_HOSTS')
+# Strip spaces — Render env values often look like "a, b, c" and break host checks.
+ALLOWED_HOSTS = [
+    host.strip()
+    for host in env.list('ALLOWED_HOSTS', default=['localhost', '127.0.0.1'])
+    if host and host.strip()
+]
 # Render injects the public hostname for each web service
 _render_host = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
 if _render_host and _render_host not in ALLOWED_HOSTS:
     ALLOWED_HOSTS.append(_render_host)
 if '.onrender.com' not in ALLOWED_HOSTS:
     ALLOWED_HOSTS.append('.onrender.com')
+# On Render, never fail health checks due to custom-domain Host headers
+if os.environ.get('RENDER_EXTERNAL_HOSTNAME') and '*' not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append('*')
 
 # Application definition
 
@@ -226,9 +234,12 @@ REST_FRAMEWORK = {
     ],
 }
 
-# ── Email / SMTP Configuration ────────────────────────────────────────────────
-# Configure via .env: EMAIL_HOST, EMAIL_PORT, EMAIL_HOST_USER, EMAIL_HOST_PASSWORD
-# Example for Gmail:
+# ── Email Configuration ───────────────────────────────────────────────────────
+# Preferred for Render free tier:
+#   RESEND_API_KEY=re_...
+#   DEFAULT_FROM_EMAIL=LedgerPro <onboarding@resend.dev>
+#
+# SMTP remains supported for local dev / paid hosts:
 #   EMAIL_HOST=smtp.gmail.com
 #   EMAIL_PORT=587
 #   EMAIL_HOST_USER=yourname@gmail.com
