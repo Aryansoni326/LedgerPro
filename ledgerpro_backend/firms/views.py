@@ -11,7 +11,7 @@ from rest_framework.response import Response
 from accounts.models import OTPResendTracker, OTPVerification
 from accounts.otp_helpers import _client_ip, verify_otp_session
 from accounts.rate_limit import RateLimitExceeded, check_resend_ip_limit, record_resend_otp
-from accounts.services import OTPService
+from accounts.services import OTP_DELIVERY_MESSAGE, OTPDeliveryError, OTPService
 from audit.models import AuditLog, FirmAccessLog
 from firms.access import firms_queryset_for_user
 from firms.permissions import HasFirmAccess, is_firm_creator, is_firm_owner_email
@@ -92,7 +92,11 @@ def list_create_firms(request):
             email=owner_email,
             purpose='firm_owner_verify'
         )
-        OTPService.send_otp_email(owner_email, code)
+        try:
+            OTPService.send_otp_email(owner_email, code)
+        except OTPDeliveryError as e:
+            logger.error("OTP delivery failed while registering firm %s: %s", firm.id, e)
+            return Response({'error': OTP_DELIVERY_MESSAGE}, status=status.HTTP_502_BAD_GATEWAY)
 
         return Response({
             'id': firm.id,
@@ -314,6 +318,9 @@ def resend_firm_otp(request, pk):
             'message': 'A fresh code has been sent to the owner email.'
         }, status=status.HTTP_200_OK)
 
+    except OTPDeliveryError as e:
+        logger.error("OTP delivery failed in resend_firm_otp: %s", e)
+        return Response({'error': OTP_DELIVERY_MESSAGE}, status=status.HTTP_502_BAD_GATEWAY)
     except Exception as e:
         logger.error("Error in resend_firm_otp: %s", e, exc_info=True)
         return Response({'error': 'An unexpected error occurred during OTP resending.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

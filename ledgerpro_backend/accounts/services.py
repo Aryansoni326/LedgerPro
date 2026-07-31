@@ -3,6 +3,7 @@ import hmac
 import json
 import logging
 import secrets
+import urllib.error
 import urllib.parse
 import urllib.request
 
@@ -11,6 +12,17 @@ from django.conf import settings
 from .models import OTPVerification, User
 
 logger = logging.getLogger(__name__)
+
+
+class OTPDeliveryError(RuntimeError):
+    """Raised when the verification code could not be delivered to the user."""
+
+
+OTP_DELIVERY_MESSAGE = (
+    'We could not send your verification code by email. '
+    'Please try again in a moment or contact support if this continues.'
+)
+
 
 class GoogleAuthService:
     @staticmethod
@@ -247,9 +259,34 @@ class OTPService:
                 response_data = json.loads(response_body) if response_body else {}
                 logger.info("OTP email sent to %s via Resend (id=%s).", email, response_data.get('id'))
                 return True
+        except urllib.error.HTTPError as e:
+            # Resend explains rejections (unverified domain, bad key, invalid from)
+            # in the response body — without reading it the log is just "HTTP 403".
+            detail = cls._read_resend_error(e)
+            logger.error(
+                "Resend rejected OTP email for %s (status=%s, from=%s): %s",
+                email, e.code, from_address, detail,
+            )
+            raise OTPDeliveryError(detail) from e
         except Exception as e:
-            logger.error("Resend send failed for %s: %s", email, e, exc_info=True)
-            raise RuntimeError(f"Failed to send OTP email via Resend: {e}") from e
+            logger.error("Resend request failed for %s: %s", email, e, exc_info=True)
+            raise OTPDeliveryError(f"Could not reach the email provider: {e}") from e
+
+    @staticmethod
+    def _read_resend_error(error: 'urllib.error.HTTPError') -> str:
+        try:
+            body = error.read().decode('utf-8')
+        except Exception:
+            return f"HTTP {error.code} from Resend with no readable body."
+
+        try:
+            data = json.loads(body)
+        except ValueError:
+            return f"HTTP {error.code} from Resend: {body[:300]}"
+
+        message = data.get('message') or data.get('error') or body[:300]
+        name = data.get('name')
+        return f"{message} (resend_error={name}, status={error.code})" if name else f"{message} (status={error.code})"
 
     @classmethod
     def send_otp_email(cls, email: str, code: str):
@@ -275,7 +312,7 @@ class OTPService:
                 return
             except Exception as e:
                 logger.error("SMTP send failed for %s: %s", email, e, exc_info=True)
-                raise RuntimeError(f"Failed to send OTP email via SMTP: {e}") from e
+                raise OTPDeliveryError(f"SMTP delivery failed: {e}") from e
 
         # Dev-only fallback — no SMTP configured
         cls._log_to_console(email, code)
