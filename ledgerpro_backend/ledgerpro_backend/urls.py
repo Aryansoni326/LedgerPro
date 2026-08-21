@@ -20,8 +20,9 @@ urlpatterns = [
 
 
 
-if settings.DEBUG:
-    urlpatterns += [
-        re_path(r'^media/(?P<path>.*)$', xframe_options_exempt(serve), {'document_root': settings.MEDIA_ROOT}),
-    ]
+# Serve uploaded media in all environments. Production ideally uses R2/CDN;
+# local fallback still needs this route when R2 is unset (common on free Render).
+urlpatterns += [
+    re_path(r'^media/(?P<path>.*)$', xframe_options_exempt(serve), {'document_root': settings.MEDIA_ROOT}),
+]
 

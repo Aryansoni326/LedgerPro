@@ -371,30 +371,44 @@ export default function DashboardIntelligenceWorkspaces({
     router.replace(`${pathname}?${next.toString()}`, { scroll: false });
   }, [accessibleWorkspaces.length, activeWorkspace, pathname, requestedWorkspace, router, searchParams]);
 
-  const apiFetch = useCallback(async <T,>(path: string): Promise<T> => {
+  const apiFetch = useCallback(async <T,>(path: string, timeoutMs = 20000): Promise<T> => {
     const activeToken = token || localStorage.getItem('auth_token');
     if (!activeToken) {
       throw new Error('No authenticated session found.');
     }
     const apiUrl = getApiBaseUrl();
-    const res = await fetch(`${apiUrl}${path}`, {
-      headers: {
-        Authorization: `Bearer ${activeToken}`,
-        'Content-Type': 'application/json',
-      },
-    });
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(text || `Request failed with ${res.status}`);
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const res = await fetch(`${apiUrl}${path}`, {
+        headers: {
+          Authorization: `Bearer ${activeToken}`,
+          'Content-Type': 'application/json',
+        },
+        signal: controller.signal,
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || `Request failed with ${res.status}`);
+      }
+      return res.json();
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        throw new Error('Request timed out. Click Refresh workspace and try again.');
+      }
+      throw error;
+    } finally {
+      window.clearTimeout(timer);
     }
-    return res.json();
   }, [token]);
+
+  const selectedFirmId = selectedFirm?.id ?? null;
 
   useEffect(() => {
     let cancelled = false;
     const run = async () => {
       if (activeWorkspace !== 'owner-health') return;
-      if (!selectedFirm) {
+      if (!selectedFirmId) {
         setOwnerHealth({
           loading: false,
           error: null,
@@ -407,22 +421,47 @@ export default function DashboardIntelligenceWorkspaces({
 
       setOwnerHealth((prev) => ({ ...prev, loading: true, error: null }));
       try {
-        const [riskSummary, forecast, riskList] = await Promise.all([
-          apiFetch<RiskSummary>(`/api/firms/${selectedFirm.id}/risk-summary/`),
-          apiFetch<CashFlowForecast>(`/api/firms/${selectedFirm.id}/cash-flow-forecast/`),
+        // Prefer partial success over an infinite spinner if one endpoint stalls.
+        const [riskSummaryResult, forecastResult, riskListResult] = await Promise.allSettled([
+          apiFetch<RiskSummary>(`/api/firms/${selectedFirmId}/risk-summary/`),
+          apiFetch<CashFlowForecast>(`/api/firms/${selectedFirmId}/cash-flow-forecast/`),
           apiFetch<{ results: RiskSignalListItem[] }>(
-            `/api/firms/${selectedFirm.id}/risk-signals/?status=open&page_size=6`,
+            `/api/firms/${selectedFirmId}/risk-signals/?status=open&page_size=6`,
           ),
         ]);
-        if (!cancelled) {
+
+        if (cancelled) return;
+
+        const riskSummary =
+          riskSummaryResult.status === 'fulfilled' ? riskSummaryResult.value : null;
+        const forecast = forecastResult.status === 'fulfilled' ? forecastResult.value : null;
+        const risks =
+          riskListResult.status === 'fulfilled' ? riskListResult.value.results || [] : [];
+
+        const failures = [riskSummaryResult, forecastResult, riskListResult]
+          .filter((result): result is PromiseRejectedResult => result.status === 'rejected')
+          .map((result) =>
+            result.reason instanceof Error ? result.reason.message : 'Request failed',
+          );
+
+        if (!riskSummary && !forecast) {
           setOwnerHealth({
             loading: false,
-            error: null,
-            riskSummary,
-            forecast,
-            risks: riskList.results || [],
+            error: failures[0] || 'Failed to load owner health view.',
+            riskSummary: null,
+            forecast: null,
+            risks: [],
           });
+          return;
         }
+
+        setOwnerHealth({
+          loading: false,
+          error: failures.length ? `Partial load: ${failures[0]}` : null,
+          riskSummary,
+          forecast,
+          risks,
+        });
       } catch (error) {
         if (!cancelled) {
           setOwnerHealth((prev) => ({
@@ -437,7 +476,7 @@ export default function DashboardIntelligenceWorkspaces({
     return () => {
       cancelled = true;
     };
-  }, [activeWorkspace, apiFetch, refreshTick, selectedFirm, token]);
+  }, [activeWorkspace, apiFetch, refreshTick, selectedFirmId, token]);
 
   useEffect(() => {
     let cancelled = false;
@@ -451,20 +490,31 @@ export default function DashboardIntelligenceWorkspaces({
 
       setAccountantView((prev) => ({ ...prev, loading: true, error: null }));
       try {
-        const clientRows = await Promise.all(
-          activeFirms.map(async (firm) => {
-            const [riskSummary, forecast] = await Promise.all([
-              apiFetch<RiskSummary>(`/api/firms/${firm.id}/risk-summary/`).catch(() => null),
-              apiFetch<CashFlowForecast>(`/api/firms/${firm.id}/cash-flow-forecast/`).catch(() => null),
-            ]);
-            return {
-              firm,
-              riskSummary,
-              forecast,
-              riskScore: severityWeight(riskSummary),
-            } satisfies ClientHealthRow;
-          }),
-        );
+        // Load clients in small batches so we don't block the API worker
+        // (cash-flow-forecast can be computed on-demand and starve other views).
+        const clientRows: ClientHealthRow[] = [];
+        const batchSize = 3;
+        for (let i = 0; i < activeFirms.length; i += batchSize) {
+          if (cancelled) return;
+          const batch = activeFirms.slice(i, i + batchSize);
+          const batchRows = await Promise.all(
+            batch.map(async (firm) => {
+              const [riskSummary, forecast] = await Promise.all([
+                apiFetch<RiskSummary>(`/api/firms/${firm.id}/risk-summary/`).catch(() => null),
+                apiFetch<CashFlowForecast>(`/api/firms/${firm.id}/cash-flow-forecast/`).catch(
+                  () => null,
+                ),
+              ]);
+              return {
+                firm,
+                riskSummary,
+                forecast,
+                riskScore: severityWeight(riskSummary),
+              } satisfies ClientHealthRow;
+            }),
+          );
+          clientRows.push(...batchRows);
+        }
 
         clientRows.sort((a, b) => {
           if (b.riskScore !== a.riskScore) return b.riskScore - a.riskScore;
@@ -494,7 +544,7 @@ export default function DashboardIntelligenceWorkspaces({
     let cancelled = false;
     const run = async () => {
       if (activeWorkspace !== 'cfo-intelligence') return;
-      if (!selectedFirm) {
+      if (!selectedFirmId) {
         setCfoView({
           loading: false,
           error: null,
@@ -508,22 +558,57 @@ export default function DashboardIntelligenceWorkspaces({
 
       setCfoView((prev) => ({ ...prev, loading: true, error: null }));
       try {
-        const [riskSummary, forecast, vendorScores, customerScores] = await Promise.all([
-          apiFetch<RiskSummary>(`/api/firms/${selectedFirm.id}/risk-summary/`),
-          apiFetch<CashFlowForecast>(`/api/firms/${selectedFirm.id}/cash-flow-forecast/`),
-          apiFetch<{ results: ScoreRow[] }>(`/api/firms/${selectedFirm.id}/vendor-scores/`),
-          apiFetch<{ results: ScoreRow[] }>(`/api/firms/${selectedFirm.id}/customer-scores/`),
-        ]);
-        if (!cancelled) {
+        const [riskSummaryResult, forecastResult, vendorScoresResult, customerScoresResult] =
+          await Promise.allSettled([
+            apiFetch<RiskSummary>(`/api/firms/${selectedFirmId}/risk-summary/`),
+            apiFetch<CashFlowForecast>(`/api/firms/${selectedFirmId}/cash-flow-forecast/`),
+            apiFetch<{ results: ScoreRow[] }>(`/api/firms/${selectedFirmId}/vendor-scores/`),
+            apiFetch<{ results: ScoreRow[] }>(`/api/firms/${selectedFirmId}/customer-scores/`),
+          ]);
+
+        if (cancelled) return;
+
+        const riskSummary =
+          riskSummaryResult.status === 'fulfilled' ? riskSummaryResult.value : null;
+        const forecast = forecastResult.status === 'fulfilled' ? forecastResult.value : null;
+        const vendorScores =
+          vendorScoresResult.status === 'fulfilled' ? vendorScoresResult.value.results || [] : [];
+        const customerScores =
+          customerScoresResult.status === 'fulfilled'
+            ? customerScoresResult.value.results || []
+            : [];
+
+        const failures = [
+          riskSummaryResult,
+          forecastResult,
+          vendorScoresResult,
+          customerScoresResult,
+        ]
+          .filter((result): result is PromiseRejectedResult => result.status === 'rejected')
+          .map((result) =>
+            result.reason instanceof Error ? result.reason.message : 'Request failed',
+          );
+
+        if (!riskSummary && !forecast) {
           setCfoView({
             loading: false,
-            error: null,
-            riskSummary,
-            forecast,
-            vendorScores: vendorScores.results || [],
-            customerScores: customerScores.results || [],
+            error: failures[0] || 'Failed to load CFO intelligence view.',
+            riskSummary: null,
+            forecast: null,
+            vendorScores: [],
+            customerScores: [],
           });
+          return;
         }
+
+        setCfoView({
+          loading: false,
+          error: failures.length ? `Partial load: ${failures[0]}` : null,
+          riskSummary,
+          forecast,
+          vendorScores,
+          customerScores,
+        });
       } catch (error) {
         if (!cancelled) {
           setCfoView((prev) => ({
@@ -538,13 +623,13 @@ export default function DashboardIntelligenceWorkspaces({
     return () => {
       cancelled = true;
     };
-  }, [activeWorkspace, apiFetch, refreshTick, selectedFirm, token]);
+  }, [activeWorkspace, apiFetch, refreshTick, selectedFirmId, token]);
 
   useEffect(() => {
     let cancelled = false;
     const run = async () => {
       if (activeWorkspace !== 'auditor-evidence') return;
-      if (!selectedFirm) {
+      if (!selectedFirmId) {
         setAuditorView((prev) => ({
           ...prev,
           loading: false,
@@ -561,9 +646,9 @@ export default function DashboardIntelligenceWorkspaces({
       try {
         const [riskList, activity] = await Promise.all([
           apiFetch<{ results: RiskSignalListItem[] }>(
-            `/api/firms/${selectedFirm.id}/risk-signals/?status=all&page_size=12&ordering=-created_at`,
+            `/api/firms/${selectedFirmId}/risk-signals/?status=all&page_size=12&ordering=-created_at`,
           ),
-          apiFetch<ActivityFeed>(`/api/firms/${selectedFirm.id}/activity?limit=25`),
+          apiFetch<ActivityFeed>(`/api/firms/${selectedFirmId}/activity?limit=25`),
         ]);
         const firstSignalId = riskList.results?.[0]?.id ?? null;
         if (!cancelled) {
@@ -592,13 +677,13 @@ export default function DashboardIntelligenceWorkspaces({
     return () => {
       cancelled = true;
     };
-  }, [activeWorkspace, apiFetch, refreshTick, selectedFirm, token]);
+  }, [activeWorkspace, apiFetch, refreshTick, selectedFirmId, token]);
 
   useEffect(() => {
     let cancelled = false;
     const run = async () => {
       if (activeWorkspace !== 'auditor-evidence') return;
-      if (!selectedFirm || !auditorView.selectedSignalId) {
+      if (!selectedFirmId || !auditorView.selectedSignalId) {
         setAuditorView((prev) => ({ ...prev, graph: null, graphError: null, graphLoading: false }));
         return;
       }
@@ -606,7 +691,7 @@ export default function DashboardIntelligenceWorkspaces({
       setAuditorView((prev) => ({ ...prev, graphLoading: true, graphError: null }));
       try {
         const graph = await apiFetch<EvidenceGraph>(
-          `/api/firms/${selectedFirm.id}/graph/risk-signal/${auditorView.selectedSignalId}/`,
+          `/api/firms/${selectedFirmId}/graph/risk-signal/${auditorView.selectedSignalId}/`,
         );
         if (!cancelled) {
           setAuditorView((prev) => ({ ...prev, graphLoading: false, graph }));
@@ -626,7 +711,7 @@ export default function DashboardIntelligenceWorkspaces({
     return () => {
       cancelled = true;
     };
-  }, [activeWorkspace, apiFetch, auditorView.selectedSignalId, selectedFirm, token]);
+  }, [activeWorkspace, apiFetch, auditorView.selectedSignalId, selectedFirmId, token]);
 
   const setWorkspace = (workspace: WorkspaceKey) => {
     const next = new URLSearchParams(searchParams.toString());
@@ -729,15 +814,16 @@ export default function DashboardIntelligenceWorkspaces({
       {activeWorkspace === 'owner-health' ? (
         !selectedFirm ? (
           <EmptyState message="Select a firm to load the Business Owner health view." />
-        ) : ownerHealth.loading && !ownerHealth.riskSummary ? (
+        ) : ownerHealth.loading && !ownerHealth.riskSummary && !ownerHealth.forecast ? (
           <div className="flex items-center justify-center gap-3 rounded-xl border border-border-subtle bg-bg-secondary p-10 text-sm text-text-secondary">
             <ThreeDotLoader />
             <span>Loading owner health metrics…</span>
           </div>
-        ) : ownerHealth.error ? (
+        ) : ownerHealth.error && !ownerHealth.riskSummary && !ownerHealth.forecast ? (
           <ErrorState message={ownerHealth.error} />
         ) : (
           <div className="space-y-5">
+            {ownerHealth.error ? <ErrorState message={ownerHealth.error} /> : null}
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
               <MetricCard
                 label="Financial health"
@@ -943,15 +1029,16 @@ export default function DashboardIntelligenceWorkspaces({
       {activeWorkspace === 'cfo-intelligence' ? (
         !selectedFirm ? (
           <EmptyState message="Select a firm to open the CFO Intelligence view." />
-        ) : cfoView.loading && !cfoView.riskSummary ? (
+        ) : cfoView.loading && !cfoView.riskSummary && !cfoView.forecast ? (
           <div className="flex items-center justify-center gap-3 rounded-xl border border-border-subtle bg-bg-secondary p-10 text-sm text-text-secondary">
             <ThreeDotLoader />
             <span>Loading CFO intelligence…</span>
           </div>
-        ) : cfoView.error ? (
+        ) : cfoView.error && !cfoView.riskSummary && !cfoView.forecast ? (
           <ErrorState message={cfoView.error} />
         ) : (
           <div className="space-y-5">
+            {cfoView.error ? <ErrorState message={cfoView.error} /> : null}
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
               <MetricCard
                 label="Current cash"

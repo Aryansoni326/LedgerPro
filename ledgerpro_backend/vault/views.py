@@ -106,6 +106,8 @@ def get_vault_day_files(request, firm_id, year, month, day):
             'module': entry.module,
             'is_finalized': entry.is_finalized,
             'uploaded_at': entry.uploaded_at.isoformat(),
+            'download_url': f'/api/vault/{entry.id}/download',
+            'excel_export_id': entry.excel_export_id,
         }
         if entry.bill:
             item['bill'] = {
@@ -124,6 +126,91 @@ def get_vault_day_files(request, firm_id, year, month, day):
         data.append(item)
 
     return Response(data, status=status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def download_vault_entry(request, pk):
+    """
+    Authenticated vault file download. Never send users to raw /media/ URLs —
+    stream bytes here (and rebuild Excel exports when the media file is gone).
+    """
+    from django.http import HttpResponse
+    from firms.permissions import is_firm_creator, is_firm_owner_email
+    from invoices.excel_builder import rebuild_excel_bytes_for_batch
+
+    try:
+        entry = CloudVaultEntry.objects.select_related('firm', 'excel_export', 'bill').get(
+            pk=pk,
+            is_deleted=False,
+        )
+    except CloudVaultEntry.DoesNotExist:
+        return Response({'error': 'Vault entry not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+    can_access = is_firm_creator(request.user, entry.firm) or is_firm_owner_email(request.user, entry.firm)
+    if not can_access:
+        return Response(
+            {'error': 'You do not have access to this file.'},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    filename = entry.file_name or f'vault-file-{entry.id}'
+    content_type = 'application/octet-stream'
+    lower_name = filename.lower()
+    if lower_name.endswith('.xlsx'):
+        content_type = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    elif lower_name.endswith('.pdf'):
+        content_type = 'application/pdf'
+    elif lower_name.endswith(('.jpg', '.jpeg')):
+        content_type = 'image/jpeg'
+    elif lower_name.endswith('.png'):
+        content_type = 'image/png'
+
+    file_bytes = None
+    source_url = entry.file_url
+
+    # Prefer excel batch path so missing media can be regenerated.
+    if entry.excel_export_id and entry.excel_export:
+        batch = entry.excel_export
+        try:
+            file_bytes = InvoiceStorageService.read_file_bytes(batch.file_url or source_url)
+        except FileNotFoundError:
+            try:
+                file_bytes = rebuild_excel_bytes_for_batch(batch)
+                restored_url = InvoiceStorageService.upload_export(
+                    file_bytes,
+                    batch.file_name or filename,
+                    entry.firm_id,
+                )
+                batch.file_url = restored_url
+                batch.save(update_fields=['file_url'])
+                entry.file_url = restored_url
+                entry.save(update_fields=['file_url'])
+            except Exception as exc:
+                logger.error('Vault excel rebuild failed for entry %s: %s', entry.id, exc, exc_info=True)
+                return Response(
+                    {'error': 'Excel file is missing and could not be rebuilt.'},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+    else:
+        try:
+            file_bytes = InvoiceStorageService.read_file_bytes(source_url)
+        except FileNotFoundError:
+            return Response(
+                {'error': 'File is no longer available on the server.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        except Exception as exc:
+            logger.error('Vault download failed for entry %s: %s', entry.id, exc, exc_info=True)
+            return Response(
+                {'error': 'Failed to read vault file.'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+    response = HttpResponse(file_bytes, content_type=content_type)
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    response['Content-Length'] = str(len(file_bytes))
+    return response
 
 
 @api_view(['DELETE'])

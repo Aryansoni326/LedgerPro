@@ -7,6 +7,24 @@ from django.conf import settings
 logger = logging.getLogger(__name__)
 
 class InvoiceStorageService:
+    _PLACEHOLDER_VALUES = {'', 'unused', 'changeme', 'your-key', 'your_key'}
+
+    @classmethod
+    def _env(cls, key: str) -> str | None:
+        value = (os.environ.get(key) or '').strip()
+        if not value or value.lower() in cls._PLACEHOLDER_VALUES:
+            return None
+        return value
+
+    @classmethod
+    def _r2_config(cls):
+        return (
+            cls._env('R2_ACCESS_KEY_ID'),
+            cls._env('R2_SECRET_ACCESS_KEY'),
+            cls._env('R2_BUCKET_NAME'),
+            cls._env('R2_ENDPOINT_URL'),
+        )
+
     @classmethod
     def upload_invoice(cls, file_obj, firm_id: int) -> str:
         """
@@ -21,10 +39,7 @@ class InvoiceStorageService:
         r2_key = f"firms/{firm_id}/invoices/raw/{unique_filename}"
 
         # Fetch environment parameters
-        r2_access_key = os.environ.get('R2_ACCESS_KEY_ID')
-        r2_secret_key = os.environ.get('R2_SECRET_ACCESS_KEY')
-        r2_bucket_name = os.environ.get('R2_BUCKET_NAME')
-        r2_endpoint_url = os.environ.get('R2_ENDPOINT_URL')
+        r2_access_key, r2_secret_key, r2_bucket_name, r2_endpoint_url = cls._r2_config()
 
         if r2_access_key and r2_secret_key and r2_bucket_name and r2_endpoint_url:
             try:
@@ -84,14 +99,10 @@ class InvoiceStorageService:
         Uploads Excel export bytes to Cloudflare R2, falling back to local Django media storage.
         R2 Path format: firms/{firm_id}/exports/{uuid}_{filename}
         """
-        import uuid
         unique_filename = f"{uuid.uuid4()}_{filename}"
         r2_key = f"firms/{firm_id}/exports/{unique_filename}"
 
-        r2_access_key = os.environ.get('R2_ACCESS_KEY_ID')
-        r2_secret_key = os.environ.get('R2_SECRET_ACCESS_KEY')
-        r2_bucket_name = os.environ.get('R2_BUCKET_NAME')
-        r2_endpoint_url = os.environ.get('R2_ENDPOINT_URL')
+        r2_access_key, r2_secret_key, r2_bucket_name, r2_endpoint_url = cls._r2_config()
 
         if r2_access_key and r2_secret_key and r2_bucket_name and r2_endpoint_url:
             try:
@@ -131,3 +142,50 @@ class InvoiceStorageService:
         except Exception as e:
             logger.error("Local export storage fallback failed: %s", e, exc_info=True)
             raise RuntimeError("Failed to store export file.")
+
+    @classmethod
+    def read_file_bytes(cls, file_url: str) -> bytes:
+        """
+        Load stored file bytes from local media path or remote/R2 URL.
+        """
+        if not file_url:
+            raise FileNotFoundError('Empty file URL.')
+
+        media_url = settings.MEDIA_URL.rstrip('/') + '/'
+        if file_url.startswith(media_url) or file_url.startswith('/media/'):
+            relative = file_url.split('/media/', 1)[-1].lstrip('/')
+            local_path = os.path.join(settings.MEDIA_ROOT, *relative.split('/'))
+            if not os.path.isfile(local_path):
+                raise FileNotFoundError(f'Local media file missing: {local_path}')
+            with open(local_path, 'rb') as handle:
+                return handle.read()
+
+        r2_access_key, r2_secret_key, r2_bucket_name, r2_endpoint_url = cls._r2_config()
+        if (
+            r2_access_key
+            and r2_secret_key
+            and r2_bucket_name
+            and r2_endpoint_url
+            and r2_endpoint_url.rstrip('/') in file_url
+        ):
+            # file_url format: {endpoint}/{bucket}/{key}
+            prefix = f"{r2_endpoint_url.rstrip('/')}/{r2_bucket_name}/"
+            if file_url.startswith(prefix):
+                key = file_url[len(prefix):]
+                import boto3
+                s3_client = boto3.client(
+                    's3',
+                    aws_access_key_id=r2_access_key,
+                    aws_secret_access_key=r2_secret_key,
+                    endpoint_url=r2_endpoint_url,
+                )
+                obj = s3_client.get_object(Bucket=r2_bucket_name, Key=key)
+                return obj['Body'].read()
+
+        # Last resort: HTTP fetch for absolute URLs
+        if file_url.startswith('http://') or file_url.startswith('https://'):
+            from urllib.request import urlopen
+            with urlopen(file_url, timeout=30) as response:
+                return response.read()
+
+        raise FileNotFoundError(f'Unable to resolve file URL: {file_url}')

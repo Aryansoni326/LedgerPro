@@ -302,12 +302,73 @@ export default function DashboardPage() {
       window.URL.revokeObjectURL(blobUrl);
     } catch (err) {
       console.error("Failed to download via blob, falling back", err);
-      const link = document.createElement('a');
-      link.href = getFileUrl(url);
-      link.setAttribute('download', filename);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
+      // Do not navigate the current tab to a raw file URL (causes Not Found pages).
+      throw err instanceof Error ? err : new Error('Download failed.');
+    }
+  };
+
+  const downloadAuthenticatedPath = async (path: string, filename: string) => {
+    const activeToken = token || localStorage.getItem('auth_token');
+    if (!activeToken) throw new Error('No authenticated session found.');
+    const apiUrl = getApiBaseUrl();
+    const res = await fetch(`${apiUrl}${path.startsWith('/') ? path : `/${path}`}`, {
+      headers: { Authorization: `Bearer ${activeToken}` },
+    });
+    if (!res.ok) {
+      let message = `Download failed (${res.status}).`;
+      try {
+        const data = await res.json();
+        if (data?.error) message = data.error;
+      } catch {
+        // ignore non-JSON bodies
+      }
+      throw new Error(message);
+    }
+    const blob = await res.blob();
+    const blobUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = blobUrl;
+    link.setAttribute('download', filename);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(blobUrl);
+  };
+
+  const downloadAuthenticatedExcel = async (batch: {
+    batch_id?: number;
+    file_name?: string;
+    download_url?: string;
+  }, filename?: string) => {
+    if (!batch?.batch_id && !batch?.download_url) {
+      throw new Error('Missing export batch id for download.');
+    }
+    const path = batch.download_url || `/api/excel-exports/${batch.batch_id}/download`;
+    await downloadAuthenticatedPath(
+      path,
+      filename || batch.file_name || `LedgerPro Excel ${new Date().toISOString().slice(0, 10)}.xlsx`,
+    );
+  };
+
+  const handleVaultDownload = async (entry: any) => {
+    try {
+      // Prefer authenticated vault streaming — never navigate to /media/ URLs.
+      if (entry?.id) {
+        await downloadAuthenticatedPath(
+          entry.download_url || `/api/vault/${entry.id}/download`,
+          entry.file_name || 'LedgerPro-file',
+        );
+      } else if (entry?.excel_export_id) {
+        await downloadAuthenticatedExcel(
+          { batch_id: entry.excel_export_id, file_name: entry.file_name },
+          entry.file_name,
+        );
+      } else {
+        throw new Error('Missing vault file id.');
+      }
+      triggerToast('Download started.');
+    } catch (err) {
+      triggerToast(err instanceof Error ? err.message : 'Failed to download file.');
     }
   };
 
@@ -748,16 +809,18 @@ export default function DashboardPage() {
   };
 
   const handleDownloadExcelPopup = async () => {
-    if (!lastExportBatch || !lastExportBatch.file_url) return;
-    
-    // Format filename as "LedgerPro Excel YYYY-MM-DD.xlsx"
+    if (!lastExportBatch) return;
+
     const dateStr = new Date().toISOString().slice(0, 10);
     const filename = `LedgerPro Excel ${dateStr}.xlsx`;
-    
-    await downloadBlob(lastExportBatch.file_url, filename);
-    triggerToast("Excel downloaded successfully.");
-    
-    await clearDataAndGoToOverview(lastExportBatch.bill_ids || []);
+
+    try {
+      await downloadAuthenticatedExcel(lastExportBatch, filename);
+      triggerToast("Excel downloaded successfully.");
+      await clearDataAndGoToOverview(lastExportBatch.bill_ids || []);
+    } catch (err) {
+      triggerToast(err instanceof Error ? err.message : "Failed to download Excel.");
+    }
   };
 
   const handleImportExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -798,14 +861,20 @@ export default function DashboardPage() {
   };
 
   // 3.7. Download Export Handler
-  const handleDownloadExport = (url: string, name: string) => {
-    const link = document.createElement('a');
-    link.href = getFileUrl(url);
-    link.setAttribute('download', name);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    setExportBatch(null);
+  const handleDownloadExport = async (batchOrUrl: any, name?: string) => {
+    try {
+      if (batchOrUrl && typeof batchOrUrl === 'object') {
+        await downloadAuthenticatedExcel(batchOrUrl, name || batchOrUrl.file_name);
+      } else if (typeof batchOrUrl === 'string') {
+        await downloadBlob(batchOrUrl, name || 'LedgerPro-export.xlsx');
+      } else {
+        throw new Error('Nothing to download.');
+      }
+      triggerToast("Excel downloaded successfully.");
+      setExportBatch(null);
+    } catch (err) {
+      triggerToast(err instanceof Error ? err.message : "Failed to download Excel.");
+    }
   };
 
   // 3.8. Vault Helpers & Handlers
@@ -3916,7 +3985,7 @@ export default function DashboardPage() {
                                   </td>
                                   <td className="p-2 text-center flex items-center justify-center gap-1.5">
                                     <button
-                                      onClick={() => handleDownloadExport(entry.file_url, entry.file_name)}
+                                      onClick={() => handleVaultDownload(entry)}
                                       className="px-2.5 py-1 border border-border-subtle rounded text-[10px] font-semibold hover:bg-bg-primary transition-all active:scale-95"
                                     >
                                       Download
@@ -4423,7 +4492,7 @@ export default function DashboardPage() {
                 Done
               </button>
               <button 
-                onClick={() => handleDownloadExport(exportBatch.file_url, exportBatch.file_name)}
+                onClick={() => handleDownloadExport(exportBatch, exportBatch.file_name)}
                 className="px-4 py-2 bg-accent text-accent-foreground font-semibold rounded hover:opacity-90 active:scale-95 transition-all flex items-center gap-1.5"
               >
                 Download File

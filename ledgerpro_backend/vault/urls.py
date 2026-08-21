@@ -8,5 +8,6 @@ urlpatterns = [
     path('firms/<int:firm_id>/vault/<int:year>/<int:month>/days', views.get_vault_days, name='vault_days'),
     path('firms/<int:firm_id>/vault/<int:year>/<int:month>/<int:day>', views.get_vault_day_files, name='vault_day_files'),
     path('vault/<int:pk>', views.delete_vault_entry, name='delete_vault_entry'),
+    path('vault/<int:pk>/download', views.download_vault_entry, name='download_vault_entry'),
     path('firms/<int:firm_id>/vault/upload-stub', views.upload_stub_file, name='upload_stub_file'),
 ]

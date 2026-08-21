@@ -2,6 +2,7 @@ import logging
 import re
 from io import BytesIO
 
+from django.http import HttpResponse
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
@@ -22,6 +23,81 @@ from .services import InvoiceStorageService
 from .tasks import extract_invoice_data
 
 logger = logging.getLogger(__name__)
+
+
+def _user_can_access_firm(user, firm) -> bool:
+    from firms.permissions import is_firm_creator, is_firm_owner_email
+    return bool(user and user.is_authenticated and (
+        is_firm_creator(user, firm) or is_firm_owner_email(user, firm)
+    ))
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def download_excel_export(request, batch_id):
+    """
+    Authenticated Excel download. Prefer this over raw /media/ links so
+    production (DEBUG=False) and private storage still stream the file.
+
+    If the stored media file is missing (common on ephemeral hosts), rebuild
+    the workbook from the batch's bill_ids and re-persist it.
+    """
+    from .excel_builder import rebuild_excel_bytes_for_batch
+
+    batch = ExcelExportBatch.objects.select_related('firm').filter(id=batch_id).first()
+    if not batch:
+        return Response({'error': 'Export batch not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+    if not _user_can_access_firm(request.user, batch.firm):
+        return Response(
+            {'error': 'You do not have access to this export.'},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    file_bytes = None
+    try:
+        file_bytes = InvoiceStorageService.read_file_bytes(batch.file_url)
+    except FileNotFoundError:
+        logger.warning(
+            'Excel export file missing for batch %s (%s); rebuilding from bill_ids',
+            batch.id,
+            batch.file_url,
+        )
+        try:
+            file_bytes = rebuild_excel_bytes_for_batch(batch)
+            restored_url = InvoiceStorageService.upload_export(
+                file_bytes,
+                batch.file_name or f'invoices_batch_{batch.id}.xlsx',
+                batch.firm_id,
+            )
+            batch.file_url = restored_url
+            batch.save(update_fields=['file_url'])
+            from vault.models import CloudVaultEntry
+            CloudVaultEntry.objects.filter(excel_export=batch).update(file_url=restored_url)
+        except FileNotFoundError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as exc:
+            logger.error('Failed rebuilding excel export batch %s: %s', batch.id, exc, exc_info=True)
+            return Response(
+                {'error': 'Export file is missing and could not be rebuilt.'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+    except Exception as exc:
+        logger.error('Failed reading excel export batch %s: %s', batch.id, exc, exc_info=True)
+        return Response(
+            {'error': 'Failed to read export file.'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+    filename = batch.file_name or f'ledgerpro-export-{batch.id}.xlsx'
+    response = HttpResponse(
+        file_bytes,
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    )
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    response['Content-Length'] = str(len(file_bytes))
+    return response
+
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated, HasFirmAccess])
@@ -391,110 +467,11 @@ def export_excel(request, firm_id):
     if not exported_bill_ids:
         return Response({'error': 'No matching invoice records found for export.'}, status=status.HTTP_400_BAD_REQUEST)
 
-    # 2. Group bills by upload date
-    from collections import defaultdict
-    bills_by_date = defaultdict(list)
-    for b in bills_list:
-        bills_by_date[b.uploaded_at.date()].append(b)
-
-    sorted_dates = sorted(bills_by_date.keys())
-
-    # 3. Create Spreadsheet Data
-    import io
-
-    import pandas as pd
-    from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
-    from openpyxl.utils import get_column_letter
-
-    def make_sheet_data(bills_sub):
-        rows = []
-        for b in bills_sub:
-            r = b.raw_data or {}
-            rows.append({
-                'Date of Bill': r.get('invoice_date', ''),
-                'Invoice Number': r.get('invoice_number', ''),
-                'Seller (From)': r.get('party_name_from', ''),
-                'Seller GSTIN': r.get('gstin_from', ''),
-                'Buyer (To)': r.get('party_name_to', ''),
-                'Buyer GSTIN': r.get('gstin_to', ''),
-                'Place of Supply': r.get('place_of_supply', ''),
-                'Taxable Amount': float(r.get('taxable_amount', 0.0) or 0.0),
-                'CGST': float(r.get('cgst', 0.0) or 0.0),
-                'SGST': float(r.get('sgst', 0.0) or 0.0),
-                'IGST': float(r.get('igst', 0.0) or 0.0),
-                'Total Amount': float(r.get('total_amount', 0.0) or 0.0),
-            })
-        return rows
-
-    columns = [
-        'Date of Bill', 'Invoice Number', 'Seller (From)', 'Seller GSTIN',
-        'Buyer (To)', 'Buyer GSTIN', 'Place of Supply', 'Taxable Amount',
-        'CGST', 'SGST', 'IGST', 'Total Amount'
-    ]
-
-    # 4. Generate openpyxl workbook
-    output = io.BytesIO()
-    with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        for d in sorted_dates:
-            sheet_name = d.strftime('%d-%m-%Y')
-            sub_bills = bills_by_date[d]
-            df = pd.DataFrame(make_sheet_data(sub_bills), columns=columns)
-            df.to_excel(writer, sheet_name=sheet_name, index=False)
-
-        workbook = writer.book
-        for d in sorted_dates:
-            sheet_name = d.strftime('%d-%m-%Y')
-            worksheet = workbook[sheet_name]
-            worksheet.freeze_panes = 'A2'
-
-            # Bold Header Fill & Font
-            header_font = Font(name='Calibri', size=11, bold=True, color='FFFFFF')
-            header_fill = PatternFill(start_color='1F4E79', end_color='1F4E79', fill_type='solid')
-            header_align = Alignment(horizontal='center', vertical='center', wrap_text=True)
-
-            for col_idx in range(1, 13):
-                cell = worksheet.cell(row=1, column=col_idx)
-                cell.font = header_font
-                cell.fill = header_fill
-                cell.alignment = header_align
-
-            # Auto-width calculation
-            for col in worksheet.columns:
-                max_len = max(len(str(cell.value or '')) for cell in col)
-                col_letter = get_column_letter(col[0].column)
-                worksheet.column_dimensions[col_letter].width = max(max_len + 3, 13)
-
-            # Currency styling
-            currency_format = '"₹"#,##0.00'
-            for row in range(2, worksheet.max_row + 1):
-                for col_idx in [8, 9, 10, 11, 12]:
-                    cell = worksheet.cell(row=row, column=col_idx)
-                    cell.number_format = currency_format
-                    cell.alignment = Alignment(horizontal='right')
-
-            # Summary Totals Row
-            total_row_idx = worksheet.max_row + 1
-            total_font = Font(name='Calibri', size=11, bold=True)
-            worksheet.cell(row=total_row_idx, column=1, value='Total').font = total_font
-
-            border_style = Border(
-                top=Side(style='thin', color='A0A0A0'),
-                bottom=Side(style='double', color='1F4E79')
-            )
-
-            for col_idx in [8, 9, 10, 11, 12]:
-                col_letter = get_column_letter(col_idx)
-                formula = f"=SUM({col_letter}2:{col_letter}{total_row_idx - 1})"
-                cell = worksheet.cell(row=total_row_idx, column=col_idx, value=formula)
-                cell.font = total_font
-                cell.number_format = currency_format
-                cell.alignment = Alignment(horizontal='right')
-                cell.border = border_style
-
-    excel_data = output.getvalue()
-
-    # 5. Upload file using helper service
     from datetime import datetime
+
+    from .excel_builder import build_invoice_excel_bytes
+
+    excel_data = build_invoice_excel_bytes(bills_list)
     date_str = datetime.now().strftime('%Y%m%d_%H%M%S')
     filename = f"invoices_{date_str}.xlsx"
 
@@ -534,6 +511,7 @@ def export_excel(request, firm_id):
         'batch_id': batch.id,
         'file_name': batch.file_name,
         'file_url': batch.file_url,
+        'download_url': f'/api/excel-exports/{batch.id}/download',
         'exported_count': len(exported_bill_ids),
         'bill_ids': exported_bill_ids,
         'message': 'Excel export generated successfully.'

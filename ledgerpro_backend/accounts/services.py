@@ -236,7 +236,7 @@ class OTPService:
         if not address or '@' not in address:
             raise OTPDeliveryError(
                 "DEFAULT_FROM_EMAIL is missing or invalid on the server. "
-                "Set it to e.g. LedgerPro <noreply@your-verified-domain.com>."
+                "Set it to e.g. LedgerPro <noreply@ledgerpro.store>."
             )
 
         domain = address.rsplit('@', 1)[-1]
