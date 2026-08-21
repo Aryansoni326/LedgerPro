@@ -1,12 +1,13 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useAuth, Firm } from '../auth-context';
+import React, { useState, useEffect, useRef } from 'react';
+import { useAuth } from '../auth-context';
 import { useTheme } from '../providers';
 import AddFirmModal from '../components/add-firm-modal';
 import SaasFooter from '../components/saas-footer';
 import LedgerProLogo from '../components/ledgerpro-logo';
 import DashboardNav, { TabType } from '../components/dashboard-nav';
+import DashboardIntelligenceWorkspaces from '../components/dashboard-intelligence-workspaces';
 import { getApiBaseUrl } from '../lib/api-url';
 import {
   BarChart,
@@ -1975,6 +1976,14 @@ export default function DashboardPage() {
           {/* TAB 1: OVERVIEW / ANALYTICS */}
           {activeTab === 'overview' && (
             <div className="space-y-8">
+              <DashboardIntelligenceWorkspaces
+                token={token}
+                userRole={user?.role}
+                selectedFirm={selectedFirm}
+                firms={firms}
+                setSelectedFirm={setSelectedFirm}
+              />
+
               {/* Header row */}
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>

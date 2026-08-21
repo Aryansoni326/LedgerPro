@@ -45,6 +45,7 @@ local_settings.py
 db.sqlite3
 db.sqlite3-journal
 ledgerpro_backend/db.sqlite3
+ledgerpro_backend/eval-reports/
 ledgerpro_backend/media/
 ledgerpro_backend/staticfiles/
 .pytest_cache/

@@ -129,9 +129,31 @@ https://ledgerpro-web.onrender.com/auth/google/callback
 - [ ] `.env.render` imported on API (and Celery)
 - [ ] `NEXT_PUBLIC_API_URL` set on web only
 - [ ] `https://YOUR-API.onrender.com/api/health` → `{"status":"ok"}`
+- [ ] `https://YOUR-API.onrender.com/api/email-status` → `resend_configured: true`, no `issues`
+- [ ] `RESEND_API_KEY` set on **API** (and Celery if used)
+- [ ] `DEFAULT_FROM_EMAIL=LedgerPro <noreply@YOUR-VERIFIED-DOMAIN>` (must match Resend Domains → Verified; not Gmail / not `@resend.dev`)
 - [ ] Frontend landing page loads
 - [ ] Google redirect URI matches frontend callback
-- [ ] Register / Login / OTP works
+- [ ] Register / Login / OTP works (check spam + [Resend Logs](https://resend.com/emails) if missing)
+
+## Local Docker Compose
+
+See [docs/SCALING.md](docs/SCALING.md) for Celery queue isolation (`extraction` /
+`risk` / `agents` / `default`), PgBouncer, LLM cost budgets by pricing tier, and
+**when** to leave Compose for Kubernetes.
+
+```bash
+docker compose up -d
+# Connection pooling when firm/connection count grows:
+docker compose --profile scale up -d
+```
+
+Extraction SLA under agent load (no Redis required for the simulation):
+
+```bash
+cd ledgerpro_backend
+python scripts/test_queue_isolation.py
+```
 
 ## Free tier notes
 

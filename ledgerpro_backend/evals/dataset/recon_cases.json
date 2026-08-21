@@ -1,0 +1,95 @@
+{
+  "cases": [
+    {
+      "case_id": "recon-bank-charges",
+      "description": "Payment short by typical bank fee should diagnose bank_charges",
+      "vendors": [{"key": "v1", "name": "Fee Vendor"}],
+      "customers": [],
+      "transactions": [
+        {
+          "key": "inv",
+          "txn_type": "invoice",
+          "direction": "outflow",
+          "status": "pending",
+          "reference_number": "RC-INV-1",
+          "amount": "10000.00",
+          "txn_date": "-5",
+          "vendor": "v1"
+        },
+        {
+          "key": "pay",
+          "txn_type": "payment",
+          "direction": "outflow",
+          "status": "pending",
+          "reference_number": "RC-PAY-1",
+          "amount": "9975.00",
+          "txn_date": "-3",
+          "vendor": "v1"
+        }
+      ],
+      "expected_exceptions": [
+        {"mismatch_cause": "bank_charges", "txn_key": "inv"}
+      ]
+    },
+    {
+      "case_id": "recon-partial-payment",
+      "description": "Payment far below invoice should diagnose partial_payment",
+      "vendors": [{"key": "v1", "name": "Partial Pay Vendor"}],
+      "customers": [],
+      "transactions": [
+        {
+          "key": "inv",
+          "txn_type": "invoice",
+          "direction": "outflow",
+          "status": "pending",
+          "reference_number": "PP-INV",
+          "amount": "100000.00",
+          "txn_date": "-6",
+          "vendor": "v1"
+        },
+        {
+          "key": "pay",
+          "txn_type": "payment",
+          "direction": "outflow",
+          "status": "pending",
+          "reference_number": "PP-PAY",
+          "amount": "40000.00",
+          "txn_date": "-4",
+          "vendor": "v1"
+        }
+      ],
+      "expected_exceptions": [
+        {"mismatch_cause": "partial_payment", "txn_key": "inv"}
+      ]
+    },
+    {
+      "case_id": "recon-exact-match-no-exception",
+      "description": "Exact invoice/payment match should not create an exception",
+      "vendors": [{"key": "v1", "name": "Exact Match Co"}],
+      "customers": [],
+      "transactions": [
+        {
+          "key": "inv",
+          "txn_type": "invoice",
+          "direction": "outflow",
+          "status": "pending",
+          "reference_number": "EX-INV",
+          "amount": "45000.00",
+          "txn_date": "-5",
+          "vendor": "v1"
+        },
+        {
+          "key": "pay",
+          "txn_type": "payment",
+          "direction": "outflow",
+          "status": "pending",
+          "reference_number": "EX-PAY",
+          "amount": "45000.00",
+          "txn_date": "-5",
+          "vendor": "v1"
+        }
+      ],
+      "expected_exceptions": []
+    }
+  ]
+}

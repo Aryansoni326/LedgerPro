@@ -9,6 +9,7 @@ MODULE_CHOICES = [
     ('exports', 'Excel Exports'),
     ('import_export', 'Import-Export Customs'),
     ('eway_bills', 'E-Way Bills'),
+    ('documents', 'Documents'),
 ]
 
 class CloudVaultEntry(models.Model):

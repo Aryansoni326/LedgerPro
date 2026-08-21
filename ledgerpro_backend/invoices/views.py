@@ -39,6 +39,9 @@ def upload_invoices(request, firm_id):
     if not files:
         return Response({'error': 'No files provided for upload.'}, status=status.HTTP_400_BAD_REQUEST)
 
+    from billing.entitlements import reserve_documents_for_firm
+    from billing.exceptions import BillingError
+
     uploaded_bills = []
     errors = []
 
@@ -48,6 +51,13 @@ def upload_invoices(request, firm_id):
         except UploadValidationError as exc:
             errors.append(f"File '{f.name}': {exc}")
             continue
+
+        try:
+            reserve_documents_for_firm(firm, amount=1)
+        except BillingError as exc:
+            errors.append(f"File '{f.name}': {exc.message}")
+            # Stop further files once quota is hit
+            break
 
         try:
             buffer = BytesIO(file_bytes)

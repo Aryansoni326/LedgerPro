@@ -51,6 +51,9 @@ def upload_eway_bills(request, firm_id):
     if not files:
         return Response({'error': 'No files provided.'}, status=status.HTTP_400_BAD_REQUEST)
 
+    from billing.entitlements import reserve_documents_for_firm
+    from billing.exceptions import BillingError
+
     uploaded_records = []
     errors = []
 
@@ -60,6 +63,12 @@ def upload_eway_bills(request, firm_id):
         except UploadValidationError as exc:
             errors.append(f"'{f.name}': {exc}")
             continue
+
+        try:
+            reserve_documents_for_firm(firm, amount=1)
+        except BillingError as exc:
+            errors.append(f"'{f.name}': {exc.message}")
+            break
 
         try:
             # Save file using export storage

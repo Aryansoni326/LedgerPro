@@ -13,6 +13,7 @@ from accounts.otp_helpers import _client_ip, verify_otp_session
 from accounts.rate_limit import RateLimitExceeded, check_resend_ip_limit, record_resend_otp
 from accounts.services import OTP_DELIVERY_MESSAGE, OTPDeliveryError, OTPService
 from audit.models import AuditLog, FirmAccessLog
+from common.normalization import normalize_currency
 from firms.access import firms_queryset_for_user
 from firms.permissions import HasFirmAccess, is_firm_creator, is_firm_owner_email
 
@@ -27,6 +28,7 @@ def _serialize_firm(firm, user):
         'id': firm.id,
         'name': firm.name,
         'gstin': firm.gstin,
+        'base_currency': firm.base_currency,
         'state': firm.state,
         'city': firm.city,
         'owner_email': firm.owner_email,
@@ -58,8 +60,17 @@ def list_create_firms(request):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
+        from billing.entitlements import assert_can_create_organization, billing_error_response
+        from billing.exceptions import BillingError
+
+        try:
+            assert_can_create_organization(request.user)
+        except BillingError as exc:
+            return billing_error_response(exc)
+
         name = request.data.get('name')
         gstin = request.data.get('gstin', '')
+        base_currency = normalize_currency(request.data.get('base_currency'))
         state = request.data.get('state')
         city = request.data.get('city')
         owner_email = request.data.get('owner_email')
@@ -73,6 +84,7 @@ def list_create_firms(request):
         firm = Firm(
             name=name,
             gstin=gstin.upper() if gstin else None,
+            base_currency=base_currency,
             state=state,
             city=city,
             owner_email=owner_email,
@@ -180,6 +192,10 @@ def firm_activity(request, pk):
         'bill': 'Invoice / Bill',
         'import_export_record': 'Import-Export document',
         'eway_bill_record': 'E-Way Bill',
+        'document': 'Intelligence document',
+        'agent_approval': 'Agent approval',
+        'transaction': 'Transaction',
+        'risk_signal': 'Risk signal',
     }
     for entry in audit_logs:
         events.append({

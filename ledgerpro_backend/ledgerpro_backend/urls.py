@@ -13,6 +13,9 @@ urlpatterns = [
     path('api/', include('analytics.urls')),
     path('api/', include('trade_docs.urls')),
     path('api/', include('eway_bills.urls')),
+    path('api/', include('intelligence.urls')),
+    path('api/', include('agents.urls')),
+    path('api/', include('billing.urls')),
 ]
 
 

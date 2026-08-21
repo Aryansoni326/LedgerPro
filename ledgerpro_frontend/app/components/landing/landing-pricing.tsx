@@ -9,15 +9,43 @@ import { fadeUp, staggerContainer, hoverLift, viewportOnce } from './landing-mot
 
 const PRICING_PLANS = [
   {
+    name: 'Free',
+    price: '0',
+    period: '/month',
+    tagline: 'Try LedgerPro with one firm',
+    features: [
+      '1 client firm',
+      '25 documents per month',
+      '10 AI queries (read-only insights)',
+      'No API or agent access',
+    ],
+    cta: 'Start free',
+    highlighted: false,
+  },
+  {
     name: 'Starter',
     price: '2,499',
     period: '/month',
     tagline: 'For solo CAs getting started',
     features: [
       'Up to 3 client firms',
-      '500 invoices per month',
+      '500 documents per month',
       'GST validation & GSTR export',
       'Email support',
+    ],
+    cta: 'Start your free trial',
+    highlighted: false,
+  },
+  {
+    name: 'Growth',
+    price: '4,999',
+    period: '/month',
+    tagline: 'AI agents for growing practices',
+    features: [
+      'Up to 8 client firms',
+      '2,000 documents per month',
+      'Ask LedgerPro AI agent',
+      'Priority email support',
     ],
     cta: 'Start your free trial',
     highlighted: false,
@@ -26,12 +54,12 @@ const PRICING_PLANS = [
     name: 'Professional',
     price: '7,499',
     period: '/month',
-    tagline: 'For growing multi-client practices',
+    tagline: 'For multi-client practices with API needs',
     features: [
       'Up to 15 client firms',
-      'Unlimited invoices',
+      'Unlimited documents',
+      'AI agent + external API access',
       'E-way bill & import-export docs',
-      'Priority support & analytics',
     ],
     cta: 'Start your free trial',
     highlighted: true,
@@ -40,11 +68,11 @@ const PRICING_PLANS = [
     name: 'Enterprise',
     price: '18,999',
     period: '/month',
-    tagline: 'For large bookkeeping bureaus',
+    tagline: 'Custom limits without schema changes',
     features: [
-      'Unlimited client firms',
+      'Unlimited client firms (or custom caps)',
+      'Custom feature flags via config',
       'Dedicated account manager',
-      'Custom ERP integrations',
       'SLA & on-premise option',
     ],
     cta: 'Contact sales',
@@ -66,7 +94,7 @@ export default function LandingPricing() {
         whileInView="visible"
         viewport={viewportOnce}
         variants={staggerContainer}
-        className="grid md:grid-cols-3 gap-6 lg:gap-8 max-w-5xl mx-auto"
+        className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6 lg:gap-8 max-w-6xl mx-auto"
       >
         {PRICING_PLANS.map((plan, i) => (
           <motion.div

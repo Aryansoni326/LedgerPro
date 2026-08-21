@@ -1,0 +1,231 @@
+{
+  "cases": [
+    {
+      "case_id": "risk-dup-ref",
+      "description": "Two invoices share the same reference number",
+      "vendors": [{"key": "v1", "name": "Acme Supplies"}],
+      "customers": [],
+      "transactions": [
+        {
+          "key": "inv-a",
+          "txn_type": "invoice",
+          "direction": "outflow",
+          "status": "pending",
+          "reference_number": "INV-DUP-100",
+          "amount": "50000.00",
+          "txn_date": "-10",
+          "vendor": "v1"
+        },
+        {
+          "key": "inv-b",
+          "txn_type": "invoice",
+          "direction": "outflow",
+          "status": "pending",
+          "reference_number": "INV-DUP-100",
+          "amount": "50000.00",
+          "txn_date": "-8",
+          "vendor": "v1"
+        },
+        {
+          "key": "inv-clean",
+          "txn_type": "invoice",
+          "direction": "outflow",
+          "status": "pending",
+          "reference_number": "INV-UNIQUE-1",
+          "amount": "12000.00",
+          "txn_date": "-5",
+          "vendor": "v1"
+        }
+      ],
+      "expected_detections": [
+        {"category": "duplicate_invoice", "txn_key": "inv-b"}
+      ],
+      "must_not_detect": [
+        {"category": "duplicate_invoice", "txn_key": "inv-clean"}
+      ]
+    },
+    {
+      "case_id": "risk-dup-fingerprint",
+      "description": "Same vendor+amount within date window without shared ref",
+      "vendors": [{"key": "v1", "name": "Twin Vendor Co"}],
+      "customers": [],
+      "transactions": [
+        {
+          "key": "inv-1",
+          "txn_type": "invoice",
+          "direction": "outflow",
+          "status": "pending",
+          "reference_number": "PO-A",
+          "amount": "88000.00",
+          "txn_date": "-7",
+          "vendor": "v1"
+        },
+        {
+          "key": "inv-2",
+          "txn_type": "invoice",
+          "direction": "outflow",
+          "status": "pending",
+          "reference_number": "PO-B",
+          "amount": "88000.00",
+          "txn_date": "-3",
+          "vendor": "v1"
+        }
+      ],
+      "expected_detections": [
+        {"category": "duplicate_invoice", "txn_key": "inv-2"}
+      ],
+      "must_not_detect": []
+    },
+    {
+      "case_id": "risk-unusual-amount",
+      "description": "One invoice is 5x vendor median",
+      "vendors": [{"key": "v1", "name": "Steady Vendor"}],
+      "customers": [],
+      "transactions": [
+        {
+          "key": "n1",
+          "txn_type": "invoice",
+          "direction": "outflow",
+          "status": "completed",
+          "reference_number": "N-1",
+          "amount": "10000.00",
+          "txn_date": "-90",
+          "vendor": "v1"
+        },
+        {
+          "key": "n2",
+          "txn_type": "invoice",
+          "direction": "outflow",
+          "status": "completed",
+          "reference_number": "N-2",
+          "amount": "11000.00",
+          "txn_date": "-60",
+          "vendor": "v1"
+        },
+        {
+          "key": "n3",
+          "txn_type": "invoice",
+          "direction": "outflow",
+          "status": "completed",
+          "reference_number": "N-3",
+          "amount": "9000.00",
+          "txn_date": "-30",
+          "vendor": "v1"
+        },
+        {
+          "key": "spike",
+          "txn_type": "invoice",
+          "direction": "outflow",
+          "status": "pending",
+          "reference_number": "N-SPIKE",
+          "amount": "55000.00",
+          "txn_date": "-2",
+          "vendor": "v1"
+        }
+      ],
+      "expected_detections": [
+        {"category": "unusual_amount", "txn_key": "spike"}
+      ],
+      "must_not_detect": [
+        {"category": "unusual_amount", "txn_key": "n1"},
+        {"category": "unusual_amount", "txn_key": "n2"},
+        {"category": "unusual_amount", "txn_key": "n3"}
+      ]
+    },
+    {
+      "case_id": "risk-late-payment",
+      "description": "Overdue receivable should flag; paid and future due should not",
+      "vendors": [],
+      "customers": [{"key": "c1", "name": "Slow Payer Ltd"}],
+      "transactions": [
+        {
+          "key": "overdue",
+          "txn_type": "invoice",
+          "direction": "inflow",
+          "status": "pending",
+          "reference_number": "AR-LATE",
+          "amount": "200000.00",
+          "txn_date": "-90",
+          "due_date": "-45",
+          "customer": "c1"
+        },
+        {
+          "key": "future",
+          "txn_type": "invoice",
+          "direction": "inflow",
+          "status": "pending",
+          "reference_number": "AR-FUTURE",
+          "amount": "50000.00",
+          "txn_date": "-5",
+          "due_date": "+30",
+          "customer": "c1"
+        },
+        {
+          "key": "settled",
+          "txn_type": "invoice",
+          "direction": "inflow",
+          "status": "fully_matched",
+          "reference_number": "AR-PAID",
+          "amount": "75000.00",
+          "txn_date": "-120",
+          "due_date": "-90",
+          "customer": "c1"
+        }
+      ],
+      "expected_detections": [
+        {"category": "late_payment", "txn_key": "overdue"}
+      ],
+      "must_not_detect": [
+        {"category": "late_payment", "txn_key": "future"},
+        {"category": "late_payment", "txn_key": "settled"}
+      ]
+    },
+    {
+      "case_id": "risk-negative-control",
+      "description": "Clean distinct invoices — no duplicate/unusual/late signals",
+      "vendors": [{"key": "v1", "name": "Clean Co"}],
+      "customers": [{"key": "c1", "name": "Prompt Buyer"}],
+      "transactions": [
+        {
+          "key": "a",
+          "txn_type": "invoice",
+          "direction": "outflow",
+          "status": "pending",
+          "reference_number": "CLN-1",
+          "amount": "15000.00",
+          "txn_date": "-20",
+          "vendor": "v1"
+        },
+        {
+          "key": "b",
+          "txn_type": "invoice",
+          "direction": "outflow",
+          "status": "pending",
+          "reference_number": "CLN-2",
+          "amount": "16000.00",
+          "txn_date": "-10",
+          "vendor": "v1"
+        },
+        {
+          "key": "c",
+          "txn_type": "invoice",
+          "direction": "inflow",
+          "status": "pending",
+          "reference_number": "CLN-AR",
+          "amount": "22000.00",
+          "txn_date": "-3",
+          "due_date": "+14",
+          "customer": "c1"
+        }
+      ],
+      "expected_detections": [],
+      "must_not_detect": [
+        {"category": "duplicate_invoice", "txn_key": "a"},
+        {"category": "duplicate_invoice", "txn_key": "b"},
+        {"category": "unusual_amount", "txn_key": "a"},
+        {"category": "unusual_amount", "txn_key": "b"},
+        {"category": "late_payment", "txn_key": "c"}
+      ]
+    }
+  ]
+}

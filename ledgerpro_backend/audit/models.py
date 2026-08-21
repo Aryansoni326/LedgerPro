@@ -47,6 +47,8 @@ class AuditLog(models.Model):
     ACTION_VERIFY = 'verify'
     ACTION_EXPORT = 'export'
     ACTION_RETRY = 'retry_extraction'
+    ACTION_APPROVE_AGENT = 'approve_agent_action'
+    ACTION_REJECT_AGENT = 'reject_agent_action'
 
     ACTION_CHOICES = [
         (ACTION_UPLOAD, 'Upload'),
@@ -55,16 +57,27 @@ class AuditLog(models.Model):
         (ACTION_VERIFY, 'Verify'),
         (ACTION_EXPORT, 'Export'),
         (ACTION_RETRY, 'Retry Extraction'),
+        (ACTION_APPROVE_AGENT, 'Approve Agent Action'),
+        (ACTION_REJECT_AGENT, 'Reject Agent Action'),
     ]
 
     RESOURCE_BILL = 'bill'
     RESOURCE_IMPORT_EXPORT = 'import_export_record'
     RESOURCE_EWAY_BILL = 'eway_bill_record'
 
+    RESOURCE_DOCUMENT = 'document'
+    RESOURCE_AGENT_APPROVAL = 'agent_approval'
+    RESOURCE_TRANSACTION = 'transaction'
+    RESOURCE_RISK_SIGNAL = 'risk_signal'
+
     RESOURCE_CHOICES = [
         (RESOURCE_BILL, 'Bill'),
         (RESOURCE_IMPORT_EXPORT, 'Import-Export Record'),
         (RESOURCE_EWAY_BILL, 'E-Way Bill Record'),
+        (RESOURCE_DOCUMENT, 'Document'),
+        (RESOURCE_AGENT_APPROVAL, 'Agent Approval'),
+        (RESOURCE_TRANSACTION, 'Transaction'),
+        (RESOURCE_RISK_SIGNAL, 'Risk Signal'),
     ]
 
     user = models.ForeignKey(

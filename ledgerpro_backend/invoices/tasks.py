@@ -224,6 +224,7 @@ def parse_pdf_invoice(file_data, firm_name="Dinesh Engineers"):
         return {
             "invoice_number": inv_num,
             "invoice_date": iso_date,
+            "currency": "INR",
             **parties,
             **amounts,
             "confidence": {
@@ -266,6 +267,7 @@ def generate_mock_data(bill, firm):
     return {
         "invoice_number": f"INV-2026-99{bill.id:02d}",
         "invoice_date": "2026-06-30",
+        "currency": "INR",
         "party_name_from": party_name_from,
         "gstin_from": gstin_from,
         "party_name_to": party_name_to,
@@ -377,6 +379,7 @@ def extract_invoice_data(self, bill_id):
             f"{{\n"
             f"  \"invoice_number\": \"string (document invoice identifier)\",\n"
             f"  \"invoice_date\": \"string (ISO format YYYY-MM-DD)\",\n"
+            f"  \"currency\": \"string (3-letter ISO currency code, default INR)\",\n"
             f"  \"party_name_from\": \"string (name of the supplier/seller/sender party)\",\n"
             f"  \"gstin_from\": \"string (15-character GSTIN of the supplier/seller/sender party, or null if missing)\",\n"
             f"  \"party_name_to\": \"string (name of the buyer/customer/recipient party)\",\n"

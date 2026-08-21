@@ -67,6 +67,21 @@ def firm_filter_for_user(user) -> Q:
     return Q(firm__created_by=user) | Q(firm__owner_email__iexact=user.email)
 
 
+def _scoped_get_or_404(model, *, user, pk, select_related=None, q_filter=None, **extra_filters):
+    """Generic helper for firm-scoped resources.
+
+    `q_filter` defaults to the standard `firm_filter_for_user(user)` for models
+    with a direct `firm` FK. Models that scope through a parent relation (for
+    example `AgentAction -> conversation -> firm`) can provide a custom filter.
+    """
+    qs = model.objects.all()
+    if select_related:
+        qs = qs.select_related(*select_related)
+    if q_filter is None:
+        q_filter = firm_filter_for_user(user)
+    return get_object_or_404(qs.filter(q_filter, **extra_filters), pk=pk)
+
+
 def get_bill_for_user(user, pk: int, *, include_deleted: bool = False):
     qs = __import__('invoices.models', fromlist=['Bill']).Bill.objects.select_related('firm')
     if not include_deleted:
@@ -104,6 +119,175 @@ def get_vault_entry_for_user(user, pk: int):
             is_deleted=False,
         ),
         pk=pk,
+    )
+
+
+def get_vendor_for_user(user, pk: int):
+    from intelligence.models import Vendor
+    return _scoped_get_or_404(
+        Vendor,
+        user=user,
+        pk=pk,
+        select_related=('firm',),
+    )
+
+
+def get_customer_for_user(user, pk: int):
+    from intelligence.models import Customer
+    return _scoped_get_or_404(
+        Customer,
+        user=user,
+        pk=pk,
+        select_related=('firm',),
+    )
+
+
+def get_transaction_for_user(user, pk: int):
+    from intelligence.models import Transaction
+    return _scoped_get_or_404(
+        Transaction,
+        user=user,
+        pk=pk,
+        select_related=('firm',),
+    )
+
+
+def get_risk_signal_for_user(user, pk: int):
+    from intelligence.models import RiskSignal
+    return _scoped_get_or_404(
+        RiskSignal,
+        user=user,
+        pk=pk,
+        select_related=('firm',),
+    )
+
+
+def get_document_for_user(user, pk: int):
+    from intelligence.models import Document
+    return _scoped_get_or_404(
+        Document,
+        user=user,
+        pk=pk,
+        select_related=('firm',),
+        is_deleted=False,
+    )
+
+
+def get_reconciliation_link_for_user(user, pk: int):
+    from intelligence.models import ReconciliationLink
+    return _scoped_get_or_404(
+        ReconciliationLink,
+        user=user,
+        pk=pk,
+        select_related=('firm', 'transaction', 'matched_transaction'),
+        is_deleted=False,
+    )
+
+
+def get_reconciliation_exception_for_user(user, pk: int):
+    from intelligence.models import ReconciliationException
+    return _scoped_get_or_404(
+        ReconciliationException,
+        user=user,
+        pk=pk,
+        select_related=('firm', 'transaction', 'candidate_transaction'),
+        is_deleted=False,
+    )
+
+
+def get_reconciliation_run_for_user(user, pk: int):
+    from intelligence.models import ReconciliationRun
+    return _scoped_get_or_404(
+        ReconciliationRun,
+        user=user,
+        pk=pk,
+        select_related=('firm',),
+        is_deleted=False,
+    )
+
+
+def get_financial_snapshot_for_user(user, pk: int):
+    from intelligence.models import FinancialSnapshot
+    return _scoped_get_or_404(
+        FinancialSnapshot,
+        user=user,
+        pk=pk,
+        select_related=('firm',),
+        is_deleted=False,
+    )
+
+
+def get_vendor_score_for_user(user, pk: int):
+    from intelligence.models import VendorScore
+    return _scoped_get_or_404(
+        VendorScore,
+        user=user,
+        pk=pk,
+        select_related=('firm', 'vendor'),
+        is_deleted=False,
+    )
+
+
+def get_customer_score_for_user(user, pk: int):
+    from intelligence.models import CustomerScore
+    return _scoped_get_or_404(
+        CustomerScore,
+        user=user,
+        pk=pk,
+        select_related=('firm', 'customer'),
+        is_deleted=False,
+    )
+
+
+def get_trade_finance_link_for_user(user, pk: int):
+    from intelligence.models import TradeFinanceLink
+    return _scoped_get_or_404(
+        TradeFinanceLink,
+        user=user,
+        pk=pk,
+        select_related=('firm', 'vendor', 'invoice_txn', 'payment_txn', 'purchase_order_txn', 'trade_doc'),
+        is_deleted=False,
+    )
+
+
+def get_agent_conversation_for_user(user, pk):
+    from agents.models import AgentConversation
+    return _scoped_get_or_404(
+        AgentConversation,
+        user=user,
+        pk=pk,
+        select_related=('firm', 'user', 'session'),
+    )
+
+
+def get_agent_action_for_user(user, pk: int):
+    from agents.models import AgentAction
+    return _scoped_get_or_404(
+        AgentAction,
+        user=user,
+        pk=pk,
+        select_related=('conversation', 'conversation__firm'),
+        q_filter=Q(conversation__firm__created_by=user) | Q(conversation__firm__owner_email__iexact=user.email),
+    )
+
+
+def get_pending_approval_for_user(user, pk):
+    from agents.models import PendingApproval
+    return _scoped_get_or_404(
+        PendingApproval,
+        user=user,
+        pk=pk,
+        select_related=('firm', 'conversation'),
+    )
+
+
+def get_chat_session_for_user(user, pk):
+    from agents.models import ChatSession
+    return _scoped_get_or_404(
+        ChatSession,
+        user=user,
+        pk=pk,
+        select_related=('firm', 'user'),
     )
 
 

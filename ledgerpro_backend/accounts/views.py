@@ -47,6 +47,51 @@ def health(request):
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
+def email_status(request):
+    """
+    Diagnose OTP email config without exposing secrets.
+    Open: https://YOUR-API.onrender.com/api/email-status
+    """
+    api_key = (getattr(settings, 'RESEND_API_KEY', '') or '').strip()
+    from_email = (getattr(settings, 'DEFAULT_FROM_EMAIL', '') or '').strip()
+    _, from_address = OTPService._parse_from_email(from_email) if from_email else ('', '')
+    domain = from_address.rsplit('@', 1)[-1].lower() if '@' in from_address else ''
+
+    issues = []
+    if not api_key:
+        issues.append('RESEND_API_KEY is not set on this service.')
+    if not from_address:
+        issues.append('DEFAULT_FROM_EMAIL is empty.')
+    elif domain.endswith('resend.dev'):
+        issues.append(
+            'DEFAULT_FROM_EMAIL uses @resend.dev — can only send to your Resend account email. '
+            'Use an address on your verified domain.'
+        )
+    elif domain in {
+        'gmail.com', 'googlemail.com', 'yahoo.com', 'outlook.com',
+        'hotmail.com', 'live.com', 'icloud.com', 'me.com',
+    }:
+        issues.append(
+            f'DEFAULT_FROM_EMAIL uses @{domain}; Resend requires a from-address on your verified domain.'
+        )
+
+    return Response({
+        'status': 'ok' if not issues else 'misconfigured',
+        'resend_configured': bool(api_key),
+        'resend_key_length': len(api_key),
+        'default_from_email': from_email or None,
+        'from_domain': domain or None,
+        'issues': issues,
+        'hint': (
+            'In Resend → Domains, domain must be Verified. '
+            'DEFAULT_FROM_EMAIL must be like: LedgerPro <noreply@your-verified-domain.com>. '
+            'Then check Resend → Logs after trying login.'
+        ),
+    })
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
 def google_initiate(request):
     """
     Redirect the browser to Google's OAuth 2.0 authorization URL.

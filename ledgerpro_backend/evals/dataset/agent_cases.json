@@ -1,0 +1,111 @@
+{
+  "cases": [
+    {
+      "case_id": "agent-risk-grounding",
+      "description": "Risk summary claims must cite real RiskSignal records",
+      "seed": {
+        "vendors": [{"key": "v1", "name": "Risk Vendor"}],
+        "customers": [],
+        "transactions": [
+          {
+            "key": "spike",
+            "txn_type": "invoice",
+            "direction": "outflow",
+            "status": "pending",
+            "reference_number": "AG-SPIKE",
+            "amount": "99000.00",
+            "txn_date": "-2",
+            "vendor": "v1"
+          }
+        ],
+        "risk_signals": [
+          {
+            "severity": "high",
+            "category": "unusual_amount",
+            "title": "Eval Unusual Amount",
+            "description": "Synthetic spike invoice for grounding eval",
+            "entity_type": "transaction",
+            "entity_key": "spike",
+            "confidence": "0.8800"
+          }
+        ]
+      },
+      "query": "Summarize open risk signals for this firm",
+      "agent_hint": "risk",
+      "expected_tools": ["risk_summary"],
+      "grounding": {
+        "require_evidence_sources": true,
+        "require_entity_refs": false,
+        "numeric_fields_from_tools": ["total"]
+      }
+    },
+    {
+      "case_id": "agent-cashflow-grounding",
+      "description": "Cash-flow numbers in conclusion must match tool output",
+      "seed": {
+        "vendors": [{"key": "v1", "name": "CF Vendor"}],
+        "customers": [],
+        "transactions": [
+          {
+            "key": "cash",
+            "txn_type": "bank_transaction",
+            "direction": "inflow",
+            "status": "completed",
+            "reference_number": "AG-CASH",
+            "amount": "777000.00",
+            "txn_date": "-3"
+          },
+          {
+            "key": "ap",
+            "txn_type": "invoice",
+            "direction": "outflow",
+            "status": "pending",
+            "reference_number": "AG-AP",
+            "amount": "10000.00",
+            "txn_date": "0",
+            "due_date": "+45",
+            "vendor": "v1"
+          }
+        ],
+        "risk_signals": []
+      },
+      "query": "What is our cash flow forecast?",
+      "agent_hint": "cashflow",
+      "expected_tools": ["cashflow_forecast"],
+      "grounding": {
+        "require_evidence_sources": true,
+        "numeric_fields_from_tools": ["current_balance", "position_30d"]
+      }
+    },
+    {
+      "case_id": "agent-overdue-entity-refs",
+      "description": "Overdue receivables response must deep-link to real transactions",
+      "seed": {
+        "vendors": [],
+        "customers": [{"key": "c1", "name": "Owing Customer"}],
+        "transactions": [
+          {
+            "key": "ar",
+            "txn_type": "invoice",
+            "direction": "inflow",
+            "status": "pending",
+            "reference_number": "AG-AR-1",
+            "amount": "125000.00",
+            "txn_date": "-70",
+            "due_date": "-40",
+            "customer": "c1"
+          }
+        ],
+        "risk_signals": []
+      },
+      "query": "Show me overdue receivables",
+      "agent_hint": "receivables",
+      "expected_tools": ["overdue_receivables"],
+      "grounding": {
+        "require_evidence_sources": true,
+        "require_entity_refs": true,
+        "entity_ref_types": ["transaction", "customer"]
+      }
+    }
+  ]
+}

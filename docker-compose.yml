@@ -1,3 +1,34 @@
+# LedgerPro local stack — 5 core services + named Celery queue workers.
+#
+# Queue isolation (see docs/SCALING.md):
+#   extraction  — OCR / document Gemini calls (SLA-critical)
+#   risk        — reconciliation, RiskEngine, forecast, scoring
+#   agents      — Ask LedgerPro / LLM turns (prefetch=1, time limits)
+#   default     — nightly fan-outs, FX refresh
+#
+# Optional: docker compose --profile scale up   # adds PgBouncer
+
+x-backend-build: &backend-build
+  build:
+    context: ./ledgerpro_backend
+    dockerfile: Dockerfile
+  volumes:
+    - ./ledgerpro_backend:/app
+  env_file:
+    - .env
+  environment: &backend-env
+    DB_HOST: ${DB_HOST:-db}
+    REDIS_URL: redis://redis:6379/0
+    CELERY_TASK_ALWAYS_EAGER: "False"
+
+x-celery-worker: &celery-worker
+  <<: *backend-build
+  depends_on:
+    db:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+
 services:
   db:
     image: postgres:16-alpine
@@ -19,7 +50,6 @@ services:
   redis:
     image: redis:7-alpine
     container_name: ledgerpro_redis
-    # No host port — backend/celery reach Redis via docker network (redis:6379)
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -27,44 +57,70 @@ services:
       retries: 5
 
   backend:
-    build:
-      context: ./ledgerpro_backend
-      dockerfile: Dockerfile
+    <<: *backend-build
     container_name: ledgerpro_backend
     command: sh -c "python manage.py migrate && python manage.py runserver 0.0.0.0:8000"
-    volumes:
-      - ./ledgerpro_backend:/app
+    # Host 8001 — port 8000 is often taken by other local stacks (e.g. MediSync)
     ports:
-      - "8000:8000"
-    env_file:
-      - .env
-    environment:
-      - DB_HOST=db
-      - REDIS_URL=redis://redis:6379/0
+      - "8001:8000"
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
 
-  celery_worker:
-    build:
-      context: ./ledgerpro_backend
-      dockerfile: Dockerfile
-    container_name: ledgerpro_celery
-    command: celery -A ledgerpro_backend worker --loglevel=info
-    volumes:
-      - ./ledgerpro_backend:/app
-    env_file:
-      - .env
-    environment:
-      - DB_HOST=db
-      - REDIS_URL=redis://redis:6379/0
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+  # ── Named Celery queues (do NOT collapse into one worker in prod) ───
+
+  celery_extraction:
+    <<: *celery-worker
+    container_name: ledgerpro_celery_extraction
+    command: >
+      celery -A ledgerpro_backend worker
+      -Q extraction
+      -c ${CELERY_EXTRACTION_CONCURRENCY:-4}
+      --prefetch-multiplier=1
+      --loglevel=info
+      -n extraction@%h
+
+  celery_risk:
+    <<: *celery-worker
+    container_name: ledgerpro_celery_risk
+    command: >
+      celery -A ledgerpro_backend worker
+      -Q risk
+      -c ${CELERY_RISK_CONCURRENCY:-2}
+      --prefetch-multiplier=1
+      --loglevel=info
+      -n risk@%h
+
+  celery_agents:
+    <<: *celery-worker
+    container_name: ledgerpro_celery_agents
+    command: >
+      celery -A ledgerpro_backend worker
+      -Q agents
+      -c ${CELERY_AGENTS_CONCURRENCY:-2}
+      --prefetch-multiplier=1
+      --soft-time-limit=120
+      --time-limit=180
+      --loglevel=info
+      -n agents@%h
+
+  celery_default:
+    <<: *celery-worker
+    container_name: ledgerpro_celery_default
+    command: >
+      celery -A ledgerpro_backend worker
+      -Q default
+      -c ${CELERY_DEFAULT_CONCURRENCY:-2}
+      --prefetch-multiplier=1
+      --loglevel=info
+      -n default@%h
+
+  celery_beat:
+    <<: *celery-worker
+    container_name: ledgerpro_celery_beat
+    command: celery -A ledgerpro_backend beat --loglevel=info
 
   frontend:
     build:
@@ -80,10 +136,28 @@ services:
     env_file:
       - .env
     environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8000
+      - NEXT_PUBLIC_API_URL=http://localhost:8001
       - WATCHPACK_POLLING=true
     depends_on:
       - backend
+
+  # ── Scale profile: connection pooling before read-replicas / K8s ───
+  # Enable with: docker compose --profile scale up -d
+  pgbouncer:
+    profiles: ["scale"]
+    image: edoburu/pgbouncer:1.22.1
+    container_name: ledgerpro_pgbouncer
+    environment:
+      DATABASE_URL: postgres://${DB_USER:-ledgerpro_user}:${DB_PASSWORD:-ledgerpro_secure_password}@db:5432/${DB_NAME:-ledgerpro_db}
+      POOL_MODE: transaction
+      MAX_CLIENT_CONN: ${PGBOUNCER_MAX_CLIENT_CONN:-200}
+      DEFAULT_POOL_SIZE: ${PGBOUNCER_POOL_SIZE:-20}
+      AUTH_TYPE: plain
+    ports:
+      - "6432:5432"
+    depends_on:
+      db:
+        condition: service_healthy
 
 volumes:
   postgres_data:

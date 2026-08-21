@@ -223,10 +223,47 @@ class OTPService:
 
     @staticmethod
     def _parse_from_email(value: str) -> tuple[str, str]:
+        value = (value or '').strip().strip('"').strip("'")
         if '<' in value and '>' in value:
             name, email = value.rsplit('<', 1)
-            return name.strip().strip('"'), email.replace('>', '').strip()
+            return name.strip().strip('"').strip("'"), email.replace('>', '').strip()
         return 'LedgerPro', value.strip()
+
+    @classmethod
+    def _validate_resend_from(cls, from_address: str) -> None:
+        """Fail fast with actionable errors before calling Resend."""
+        address = (from_address or '').strip().lower()
+        if not address or '@' not in address:
+            raise OTPDeliveryError(
+                "DEFAULT_FROM_EMAIL is missing or invalid on the server. "
+                "Set it to e.g. LedgerPro <noreply@your-verified-domain.com>."
+            )
+
+        domain = address.rsplit('@', 1)[-1]
+        blocked = (
+            'gmail.com', 'googlemail.com', 'yahoo.com', 'outlook.com',
+            'hotmail.com', 'live.com', 'icloud.com', 'me.com',
+        )
+        if domain in blocked:
+            raise OTPDeliveryError(
+                f"DEFAULT_FROM_EMAIL uses @{domain}, which Resend cannot send from. "
+                "Use an address on your verified domain "
+                "(e.g. noreply@yourdomain.com), then redeploy."
+            )
+
+        if domain.endswith('resend.dev'):
+            raise OTPDeliveryError(
+                "DEFAULT_FROM_EMAIL still uses @resend.dev, which can only email "
+                "your own Resend account address. Verify your domain in Resend, "
+                "then set DEFAULT_FROM_EMAIL to noreply@your-domain.com and redeploy."
+            )
+
+        placeholders = ('your-verified-domain.com', 'yourdomain.com', 'example.com', 'your-email@')
+        if any(p in address for p in placeholders) or 'your-' in address:
+            raise OTPDeliveryError(
+                "DEFAULT_FROM_EMAIL still looks like a placeholder. "
+                "Set a real from-address on your verified Resend domain."
+            )
 
     @classmethod
     def _send_via_resend(cls, email: str, subject: str, html_content: str, plain_text: str) -> bool:
@@ -236,6 +273,7 @@ class OTPService:
             return False
 
         from_name, from_address = cls._parse_from_email(from_email)
+        cls._validate_resend_from(from_address)
         payload = {
             'from': f'{from_name} <{from_address}>',
             'to': [email],
@@ -292,13 +330,22 @@ class OTPService:
         return f"{message} (resend_error={name}, status={error.code})" if name else f"{message} (status={error.code})"
 
     @classmethod
+    def _console_fallback_allowed(cls) -> bool:
+        return bool(
+            getattr(settings, 'DEBUG', False)
+            and getattr(settings, 'OTP_CONSOLE_FALLBACK', False)
+        )
+
+    @classmethod
     def send_otp_email(cls, email: str, code: str):
         """
-        Send the OTP code via Resend, then SMTP, then console fallback.
+        Send the OTP code via Resend, then SMTP, then optional console fallback.
         """
         subject, html_content, plain_text = cls._build_otp_email(code)
+        api_key = (getattr(settings, 'RESEND_API_KEY', '') or '').strip()
 
-        if cls._send_via_resend(email, subject, html_content, plain_text):
+        if api_key:
+            cls._send_via_resend(email, subject, html_content, plain_text)
             return
 
         smtp_host = getattr(settings, 'EMAIL_HOST', None)
@@ -315,16 +362,25 @@ class OTPService:
                 return
             except Exception as e:
                 logger.error("SMTP send failed for %s: %s", email, e, exc_info=True)
+                if cls._console_fallback_allowed():
+                    cls._log_to_console(email, code)
+                    return
                 raise OTPDeliveryError(f"SMTP delivery failed: {e}") from e
 
-        # Dev-only fallback — no SMTP configured
-        cls._log_to_console(email, code)
+        if cls._console_fallback_allowed():
+            cls._log_to_console(email, code)
+            return
+
+        raise OTPDeliveryError(
+            "Email is not configured. Set RESEND_API_KEY and DEFAULT_FROM_EMAIL "
+            "(use a from-address on your verified Resend domain), then restart the backend."
+        )
 
     @staticmethod
     def _log_to_console(email: str, code: str):
-        """Print OTP to terminal when SMTP is not configured (development only)."""
+        """Print OTP to terminal when no email provider is configured (dev only)."""
         print("\n" + "=" * 50, flush=True)
         print(f"  [DEV OTP]  Code for {email}:  {code}", flush=True)
         print("=" * 50 + "\n", flush=True)
-        logger.warning("[DEV OTP] Code for %s: %s  (configure SMTP to send real emails)", email, code)
+        logger.warning("[DEV OTP] Code for %s: %s  (configure Resend to send real emails)", email, code)
 

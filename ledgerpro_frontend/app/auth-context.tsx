@@ -16,6 +16,7 @@ export interface Firm {
   id: number;
   name: string;
   gstin?: string;
+  base_currency?: string;
   state: string;
   city: string;
   owner_email: string;

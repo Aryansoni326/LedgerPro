@@ -1,6 +1,6 @@
 # LedgerPro Security Model
 
-This document describes how LedgerPro protects accountant workspaces and client financial data.
+This document describes how LedgerPro protects accountant workspaces, client financial data, and agent-generated actions in a multi-tenant SaaS model.
 
 ## Authentication
 
@@ -15,21 +15,49 @@ Session tokens are **Django-signed payloads** (not JWTs), passed as `Authorizati
 
 ## Authorization & data isolation
 
-Access model: **one accountant owns many firms; each firm is private to its creator.**
+Access model: **one accountant owns many firms; each firm is private to its creating accountant.**
 
 - Every `Firm` has `created_by → User`.
-- `HasFirmAccess` permission checks `obj.created_by == request.user`.
-- All firm-scoped endpoints resolve the firm (or parent firm of a bill/trade doc/vault entry) and return **HTTP 403** if the authenticated user is not the creator.
+- `HasFirmAccess` allows:
+  - the creating accountant full access
+  - the matched `owner_email` user read-only access
+- All firm-scoped endpoints resolve the firm (or the parent firm of a child record) through shared helpers in `firms/access.py`.
+- Unsafe operations additionally call `assert_can_write_firm(...)`, so view access never implies write approval.
 
-There is no shared-firm or delegated-access model in v2. Guessing another firm's numeric ID does not grant access.
+There is no delegated cross-accountant access model. Guessing another firm's numeric ID or a UUID-backed agent/session/approval ID does not grant access.
 
 ### Isolation enforcement points
 
 | Resource | Check |
 |----------|--------|
-| Firm list | `Firm.objects.filter(created_by=request.user)` |
+| Firm list | `firms_queryset_for_user(request.user)` |
 | Firm-scoped routes (`/api/firms/{id}/…`) | `get_firm_or_403()` |
-| Bills, trade docs, vault entries by PK | Load object → verify `object.firm.created_by` |
+| Bills, trade docs, e-way bills, vault entries by PK | `get_*_for_user()` helpers in `firms/access.py` |
+| Intelligence models by PK | `get_document_for_user`, `get_vendor_for_user`, `get_customer_for_user`, `get_transaction_for_user`, `get_risk_signal_for_user`, `get_reconciliation_*_for_user`, `get_financial_snapshot_for_user`, `get_*_score_for_user`, `get_trade_finance_link_for_user` |
+| Agent models by UUID / PK | `get_agent_conversation_for_user`, `get_agent_action_for_user`, `get_pending_approval_for_user`, `get_chat_session_for_user` |
+
+### Model coverage
+
+The automated security suite covers all firm-scoped models introduced in Phases 0–10:
+
+- `Document`
+- `Vendor`
+- `Customer`
+- `Transaction`
+- `RiskSignal`
+- `ReconciliationLink`
+- `ReconciliationException`
+- `ReconciliationRun`
+- `FinancialSnapshot`
+- `VendorScore`
+- `CustomerScore`
+- `TradeFinanceLink`
+- `AgentConversation`
+- `AgentAction`
+- `PendingApproval` (referred to in some product docs as “Proposed Action”)
+- `ChatSession`
+
+`ExchangeRate` is intentionally excluded from cross-firm checks because it is a global reference table with no tenant ownership.
 
 Run the isolation probe:
 
@@ -37,8 +65,21 @@ Run the isolation probe:
 cd ledgerpro_backend
 python scripts/test_cross_firm_access.py
 # or
-python manage.py test security.tests.test_security.CrossFirmIsolationTests
+python manage.py test security.tests.test_security
 ```
+
+## Agent / AI isolation review
+
+The agent orchestration layer was reviewed specifically for cross-firm context leakage and tenant bleed:
+
+- `POST /api/firms/{firm_id}/agent/query/` and `POST /api/firms/{firm_id}/ask/` both resolve the requesting firm before execution.
+- All agent tools receive `firm_id` from server-side orchestration, not from client-controlled request JSON.
+- `ChatSession` reuse is bound to `(session_id, firm, user)`, so a session from Firm A cannot be reused against Firm B’s request context.
+- Agent approvals are bound to the approval’s `firm`; write executors re-resolve target resources inside that firm before mutating.
+- Financial forecast “cache” is stored as firm-scoped `FinancialSnapshot` rows, not in a shared tenant-agnostic cache entry.
+- Graph traversal APIs now resolve linked vendors/customers with `firm_id` filters as an additional hardening step.
+
+Security conclusion: **no validated cross-firm leak was found in the new AI/agent endpoints or their context-window/cache path**. Session isolation and server-side firm scoping are covered by automated tests.
 
 ## OTP brute-force protection
 
@@ -72,13 +113,20 @@ Client-side checks in the frontend are UX only; the API rejects invalid files in
 
 Immutable `AuditLog` records (`audit` app) capture:
 
-- **Who** — accountant user
-- **What** — resource type (`bill`, `import_export_record`, `eway_bill_record`) and ID
-- **Action** — `upload`, `edit`, `delete`, `verify`, `export`, `retry_extraction`
+- **Who** — authenticated user
+- **What** — resource type (`bill`, `import_export_record`, `eway_bill_record`, `document`, `transaction`, `risk_signal`, `agent_approval`) and ID
+- **Action** — `upload`, `edit`, `delete`, `verify`, `export`, `retry_extraction`, `approve_agent_action`, `reject_agent_action`
 - **When** — UTC timestamp
 - **Context** — optional JSON details, client IP
 
-Logged on upload, inline edit, verify, delete, export, and retry for bills and trade documents; e-way bill stub uploads and vault-driven deletes are also logged.
+Coverage includes:
+
+- upload, inline edit, verify, delete, export, and retry for bills and trade documents
+- e-way bill stub uploads and vault-driven deletes
+- approval/rejection of agent proposals
+- the underlying resource mutation for approved agent writes (`transaction` / `risk_signal`) with `via: agent_approval` metadata
+
+`FirmAccessLog` records owner-visible firm access events and remains the source for firm activity feeds.
 
 Audit rows are append-only from application code (no update/delete API).
 
@@ -92,13 +140,13 @@ Audit rows are append-only from application code (no update/delete API).
 
 ```bash
 cd ledgerpro_backend
-python manage.py test security.tests.test_security
+python manage.py test security.tests.test_security agents.tests intelligence.tests
 python scripts/test_cross_firm_access.py
 ```
 
 ## Known limitations (v2)
 
-- No per-firm RBAC (single owner per firm).
+- No per-firm RBAC beyond accountant-vs-owner access mode.
 - OTP space is small; rate limits are essential — monitor `OTPRateLimitEvent` in production.
 - No virus scanning on uploads.
 - Session tokens cannot be revoked server-side without changing `SECRET_KEY` (rotation invalidates all sessions).

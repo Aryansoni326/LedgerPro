@@ -1,0 +1,100 @@
+{
+  "cases": [
+    {
+      "case_id": "cf-pressure",
+      "description": "Large upcoming payable against thin balance → pressure expected",
+      "vendors": [{"key": "v1", "name": "Pressure Vendor"}],
+      "customers": [],
+      "transactions": [
+        {
+          "key": "cash",
+          "txn_type": "bank_transaction",
+          "direction": "inflow",
+          "status": "completed",
+          "reference_number": "BANK-IN",
+          "amount": "100000.00",
+          "txn_date": "-10"
+        },
+        {
+          "key": "payable",
+          "txn_type": "invoice",
+          "direction": "outflow",
+          "status": "pending",
+          "reference_number": "AP-BIG",
+          "amount": "500000.00",
+          "txn_date": "0",
+          "due_date": "+20",
+          "vendor": "v1"
+        }
+      ],
+      "expectations": {
+        "pressure_expected": true,
+        "max_health_score": 70,
+        "explanation_must_contain": ["Pressure Vendor"]
+      }
+    },
+    {
+      "case_id": "cf-healthy",
+      "description": "Strong cash and modest payables → no pressure, high health",
+      "vendors": [{"key": "v1", "name": "Small Vendor"}],
+      "customers": [],
+      "transactions": [
+        {
+          "key": "cash",
+          "txn_type": "bank_transaction",
+          "direction": "inflow",
+          "status": "completed",
+          "reference_number": "BANK-RICH",
+          "amount": "5000000.00",
+          "txn_date": "-5"
+        },
+        {
+          "key": "payable",
+          "txn_type": "invoice",
+          "direction": "outflow",
+          "status": "pending",
+          "reference_number": "AP-SMALL",
+          "amount": "50000.00",
+          "txn_date": "0",
+          "due_date": "+40",
+          "vendor": "v1"
+        }
+      ],
+      "expectations": {
+        "pressure_expected": false,
+        "min_health_score": 80,
+        "explanation_must_contain": []
+      }
+    },
+    {
+      "case_id": "cf-balance-math",
+      "description": "Current balance equals completed inflows minus outflows",
+      "vendors": [],
+      "customers": [],
+      "transactions": [
+        {
+          "key": "in",
+          "txn_type": "bank_transaction",
+          "direction": "inflow",
+          "status": "completed",
+          "reference_number": "IN-1",
+          "amount": "400000.00",
+          "txn_date": "-8"
+        },
+        {
+          "key": "out",
+          "txn_type": "bank_transaction",
+          "direction": "outflow",
+          "status": "completed",
+          "reference_number": "OUT-1",
+          "amount": "150000.00",
+          "txn_date": "-4"
+        }
+      ],
+      "expectations": {
+        "expected_current_balance": "250000.00",
+        "pressure_expected": false
+      }
+    }
+  ]
+}

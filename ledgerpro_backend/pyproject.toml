@@ -52,4 +52,4 @@ ignore = ["E501"]
 DJANGO_SETTINGS_MODULE = "ledgerpro_backend.settings"
 python_files = ["tests.py", "test_*.py", "*_tests.py"]
 pythonpath = ["."]
-testpaths = ["security/tests"]
+testpaths = ["security/tests", "billing"]

@@ -3,6 +3,8 @@ from pathlib import Path
 
 import environ
 
+from ledgerpro_backend.celery_queues import TASK_ROUTES as CELERY_TASK_ROUTES_MAP
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -69,6 +71,10 @@ INSTALLED_APPS = [
     'eway_bills',
     'audit',
     'security',
+    'compliance',
+    'intelligence',
+    'agents',
+    'billing',
 ]
 
 MIDDLEWARE = [
@@ -194,6 +200,38 @@ CELERY_TIMEZONE = 'UTC'
 CELERY_TASK_ALWAYS_EAGER = USE_SQLITE or env.bool('CELERY_TASK_ALWAYS_EAGER', default=False)
 CELERY_TASK_EAGER_PROPAGATES = True
 
+# Named queues — extraction must never share a worker process with agents/LLM.
+# See ledgerpro_backend/celery_queues.py and docs/SCALING.md.
+CELERY_TASK_DEFAULT_QUEUE = 'default'
+CELERY_TASK_ROUTES = CELERY_TASK_ROUTES_MAP
+# Prefer fair scheduling when a single process temporarily consumes multiple queues
+CELERY_WORKER_PREFETCH_MULTIPLIER = env.int('CELERY_WORKER_PREFETCH_MULTIPLIER', default=1)
+CELERY_TASK_ACKS_LATE = True
+CELERY_TASK_REJECT_ON_WORKER_LOST = True
+
+CELERY_BEAT_SCHEDULE = {
+    'daily-historical-exchange-rates': {
+        'task': 'intelligence.tasks.nightly_exchange_rate_refresh',
+        'schedule': env.float('FX_RATE_INTERVAL_SECONDS', default=86400.0),
+        'options': {'queue': 'default'},
+    },
+    'nightly-cashflow-forecast': {
+        'task': 'intelligence.tasks.nightly_cashflow_forecast_all',
+        'schedule': env.float('FORECAST_INTERVAL_SECONDS', default=86400.0),
+        'options': {'queue': 'default'},
+    },
+    'nightly-vendor-customer-scoring': {
+        'task': 'intelligence.tasks.nightly_score_all',
+        'schedule': env.float('SCORING_INTERVAL_SECONDS', default=86400.0),
+        'options': {'queue': 'default'},
+    },
+    'nightly-trade-finance-analysis': {
+        'task': 'intelligence.tasks.nightly_trade_finance_all',
+        'schedule': env.float('TRADE_FINANCE_INTERVAL_SECONDS', default=86400.0),
+        'options': {'queue': 'default'},
+    },
+}
+
 # Media files (Uploaded invoices/docs)
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
@@ -274,3 +312,7 @@ if RESEND_API_KEY:
     EMAIL_HOST = ''
     EMAIL_HOST_USER = ''
     EMAIL_HOST_PASSWORD = ''
+
+# If True (and DEBUG), OTP may print to backend logs when no email provider is set.
+# Keep False when using Resend so a missing key fails loudly instead of a fake "email sent".
+OTP_CONSOLE_FALLBACK = env.bool('OTP_CONSOLE_FALLBACK', default=False)
