@@ -402,6 +402,7 @@ export default function DashboardPage() {
     setActiveTab('vault');
   };
 
+  // Keep export/download helpers below state declarations to avoid stale closures.
   const [excelPopupOpen, setExcelPopupOpen] = useState(false);
   const [lastExportBatch, setLastExportBatch] = useState<any>(null);
   const [isClearingData, setIsClearingData] = useState(false);
@@ -686,6 +687,16 @@ export default function DashboardPage() {
     }
   }, [selectedFirm?.id]);
 
+  // Whenever Cloud Vault is open, force-clear export overlays so a stuck
+  // generate/download spinner or success modal can never cover the vault table.
+  useEffect(() => {
+    if (activeTab !== 'vault') return;
+    setIsExporting(false);
+    setExportBatch(null);
+    setExcelPopupOpen(false);
+    setIsClearingData(false);
+  }, [activeTab]);
+
   // Vault Initializer Effect — depend on firm id (not object identity) so
   // re-renders cannot leave isLoadingVault stuck / wipe the drill-down forever.
   useEffect(() => {
@@ -846,6 +857,7 @@ export default function DashboardPage() {
     const dateStr = new Date().toISOString().slice(0, 10);
     const filename = `LedgerPro Excel ${dateStr}.xlsx`;
 
+    setIsExporting(false);
     try {
       await downloadAuthenticatedExcel(lastExportBatch, filename);
       triggerToast('Excel downloaded successfully.');
@@ -853,6 +865,7 @@ export default function DashboardPage() {
       goToCloudVaultAfterExcelDownload();
     } catch (err) {
       setIsExporting(false);
+      setExcelPopupOpen(false);
       triggerToast(err instanceof Error ? err.message : 'Failed to download Excel.');
     }
   };
@@ -896,6 +909,8 @@ export default function DashboardPage() {
 
   // 3.7. Download Export Handler
   const handleDownloadExport = async (batchOrUrl: any, name?: string) => {
+    // Clear generating overlay immediately so it cannot stick during/after download.
+    setIsExporting(false);
     try {
       if (batchOrUrl && typeof batchOrUrl === 'object') {
         await downloadAuthenticatedExcel(batchOrUrl, name || batchOrUrl.file_name);
@@ -908,6 +923,7 @@ export default function DashboardPage() {
       goToCloudVaultAfterExcelDownload();
     } catch (err) {
       setIsExporting(false);
+      setExportBatch(null);
       triggerToast(err instanceof Error ? err.message : 'Failed to download Excel.');
     }
   };
@@ -2763,10 +2779,18 @@ export default function DashboardPage() {
                         </button>
                         <button
                           onClick={handleGenerateExcel}
-                          disabled={bills.length === 0}
+                          disabled={bills.length === 0 || isExporting}
                           className="px-3 py-1.5 bg-accent text-accent-foreground text-xs font-semibold rounded hover:opacity-90 active:scale-95 transition-all flex items-center gap-1.5 disabled:opacity-50 font-mono"
                         >
-                          <FileText className="w-4 h-4" /> Generate Excel
+                          {isExporting ? (
+                            <>
+                              <ThreeDotLoader size="sm" /> Generating…
+                            </>
+                          ) : (
+                            <>
+                              <FileText className="w-4 h-4" /> Generate Excel
+                            </>
+                          )}
                         </button>
                       </div>
                     </div>
@@ -4537,17 +4561,6 @@ export default function DashboardPage() {
                 Download File
               </button>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* Excel Export Loading Spinner — hide once the success modal has a batch */}
-      {isExporting && !exportBatch && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-6 animate-in fade-in duration-200">
-          <div className="bg-bg-primary border border-border-subtle rounded-lg w-full max-w-xs p-6 shadow-2xl space-y-4 font-mono text-xs text-text-primary text-center">
-            <ThreeDotLoader size="lg" className="mx-auto" />
-            <p className="font-semibold">Generating Excel Ledger...</p>
-            <p className="text-[10px] text-text-secondary">Structuring cells, calculating totals, and compiling sheets.</p>
           </div>
         </div>
       )}
