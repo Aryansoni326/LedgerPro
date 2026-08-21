@@ -311,28 +311,40 @@ export default function DashboardPage() {
     const activeToken = token || localStorage.getItem('auth_token');
     if (!activeToken) throw new Error('No authenticated session found.');
     const apiUrl = getApiBaseUrl();
-    const res = await fetch(`${apiUrl}${path.startsWith('/') ? path : `/${path}`}`, {
-      headers: { Authorization: `Bearer ${activeToken}` },
-    });
-    if (!res.ok) {
-      let message = `Download failed (${res.status}).`;
-      try {
-        const data = await res.json();
-        if (data?.error) message = data.error;
-      } catch {
-        // ignore non-JSON bodies
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), 45000);
+    try {
+      const res = await fetch(`${apiUrl}${path.startsWith('/') ? path : `/${path}`}`, {
+        headers: { Authorization: `Bearer ${activeToken}` },
+        signal: controller.signal,
+      });
+      if (!res.ok) {
+        let message = `Download failed (${res.status}).`;
+        try {
+          const data = await res.json();
+          if (data?.error) message = data.error;
+        } catch {
+          // ignore non-JSON bodies
+        }
+        throw new Error(message);
       }
-      throw new Error(message);
+      const blob = await res.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        throw new Error('Download timed out. Please try again.');
+      }
+      throw error;
+    } finally {
+      window.clearTimeout(timer);
     }
-    const blob = await res.blob();
-    const blobUrl = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = blobUrl;
-    link.setAttribute('download', filename);
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    window.URL.revokeObjectURL(blobUrl);
   };
 
   const downloadAuthenticatedExcel = async (batch: {
@@ -351,6 +363,11 @@ export default function DashboardPage() {
   };
 
   const handleVaultDownload = async (entry: any) => {
+    if (!entry?.id && !entry?.excel_export_id) {
+      triggerToast('Missing vault file id.');
+      return;
+    }
+    setDownloadingVaultEntryId(entry.id ?? entry.excel_export_id);
     try {
       // Prefer authenticated vault streaming — never navigate to /media/ URLs.
       if (entry?.id) {
@@ -358,18 +375,31 @@ export default function DashboardPage() {
           entry.download_url || `/api/vault/${entry.id}/download`,
           entry.file_name || 'LedgerPro-file',
         );
-      } else if (entry?.excel_export_id) {
+      } else {
         await downloadAuthenticatedExcel(
           { batch_id: entry.excel_export_id, file_name: entry.file_name },
           entry.file_name,
         );
-      } else {
-        throw new Error('Missing vault file id.');
       }
-      triggerToast('Download started.');
+      // Stay on Cloud Vault; never flip global export/vault page loaders.
+      setIsExporting(false);
+      setExportBatch(null);
+      triggerToast('Excel downloaded successfully.');
     } catch (err) {
       triggerToast(err instanceof Error ? err.message : 'Failed to download file.');
+    } finally {
+      setDownloadingVaultEntryId(null);
     }
+  };
+
+  const goToCloudVaultAfterExcelDownload = () => {
+    // Always clear export overlays so the Generating Excel spinner cannot stick.
+    setIsExporting(false);
+    setExportBatch(null);
+    setExcelPopupOpen(false);
+    setLastExportBatch(null);
+    setIsClearingData(false);
+    setActiveTab('vault');
   };
 
   const [excelPopupOpen, setExcelPopupOpen] = useState(false);
@@ -388,6 +418,7 @@ export default function DashboardPage() {
   const [deletingBillId, setDeletingBillId] = useState<number | null>(null);
   const [exportBatch, setExportBatch] = useState<any | null>(null);
   const [isExporting, setIsExporting] = useState(false);
+  const [downloadingVaultEntryId, setDownloadingVaultEntryId] = useState<number | null>(null);
   const [verifyingBillId, setVerifyingBillId] = useState<number | null>(null);
   const [retryingBillId, setRetryingBillId] = useState<number | null>(null);
   const [isDeletingBill, setIsDeletingBill] = useState(false);
@@ -655,16 +686,17 @@ export default function DashboardPage() {
     }
   }, [selectedFirm?.id]);
 
-  // Vault Initializer Effect
+  // Vault Initializer Effect — depend on firm id (not object identity) so
+  // re-renders cannot leave isLoadingVault stuck / wipe the drill-down forever.
   useEffect(() => {
-    if (activeTab === 'vault' && selectedFirm) {
+    if (activeTab === 'vault' && selectedFirm?.id) {
       fetchVaultYears();
       setSelectedVaultYear(null);
       setSelectedVaultMonth(null);
       setSelectedVaultDay(null);
       setVaultFiles([]);
     }
-  }, [activeTab, selectedFirm]);
+  }, [activeTab, selectedFirm?.id]);
 
   // Analytics Fetch
   const fetchAnalytics = async (range: string) => {
@@ -735,6 +767,7 @@ export default function DashboardPage() {
   const handleGenerateExcel = async () => {
     if (guardReadOnly()) return;
     if (!selectedFirm) return;
+    setExportBatch(null);
     setIsExporting(true);
     const activeToken = token || localStorage.getItem('auth_token');
     const apiUrl = getApiBaseUrl();
@@ -756,7 +789,6 @@ export default function DashboardPage() {
 
       if (res.ok) {
         const batch = await res.json();
-        setIsExporting(false);
         setExportBatch(batch);
         setLastExportBatch(batch);
         triggerToast("Excel sheet generated successfully!");
@@ -816,10 +848,12 @@ export default function DashboardPage() {
 
     try {
       await downloadAuthenticatedExcel(lastExportBatch, filename);
-      triggerToast("Excel downloaded successfully.");
-      await clearDataAndGoToOverview(lastExportBatch.bill_ids || []);
+      triggerToast('Excel downloaded successfully.');
+      // Download should NOT clear invoices or leave a stuck export loader.
+      goToCloudVaultAfterExcelDownload();
     } catch (err) {
-      triggerToast(err instanceof Error ? err.message : "Failed to download Excel.");
+      setIsExporting(false);
+      triggerToast(err instanceof Error ? err.message : 'Failed to download Excel.');
     }
   };
 
@@ -870,10 +904,11 @@ export default function DashboardPage() {
       } else {
         throw new Error('Nothing to download.');
       }
-      triggerToast("Excel downloaded successfully.");
-      setExportBatch(null);
+      triggerToast('Excel downloaded successfully.');
+      goToCloudVaultAfterExcelDownload();
     } catch (err) {
-      triggerToast(err instanceof Error ? err.message : "Failed to download Excel.");
+      setIsExporting(false);
+      triggerToast(err instanceof Error ? err.message : 'Failed to download Excel.');
     }
   };
 
@@ -3986,9 +4021,10 @@ export default function DashboardPage() {
                                   <td className="p-2 text-center flex items-center justify-center gap-1.5">
                                     <button
                                       onClick={() => handleVaultDownload(entry)}
-                                      className="px-2.5 py-1 border border-border-subtle rounded text-[10px] font-semibold hover:bg-bg-primary transition-all active:scale-95"
+                                      disabled={downloadingVaultEntryId === entry.id}
+                                      className="px-2.5 py-1 border border-border-subtle rounded text-[10px] font-semibold hover:bg-bg-primary transition-all active:scale-95 disabled:opacity-60"
                                     >
-                                      Download
+                                      {downloadingVaultEntryId === entry.id ? 'Downloading…' : 'Download'}
                                     </button>
                                     
                                     {entry.module === 'invoices' && entry.bill && (
@@ -4486,7 +4522,10 @@ export default function DashboardPage() {
             
             <div className="flex justify-end gap-2 border-t border-border-subtle pt-4">
               <button 
-                onClick={() => setExportBatch(null)}
+                onClick={() => {
+                  setIsExporting(false);
+                  setExportBatch(null);
+                }}
                 className="px-4 py-2 border border-border-subtle rounded hover:bg-bg-secondary transition-colors"
               >
                 Done
@@ -4502,7 +4541,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Excel Export Loading Spinner */}
+      {/* Excel Export Loading Spinner — hide once the success modal has a batch */}
       {isExporting && !exportBatch && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-6 animate-in fade-in duration-200">
           <div className="bg-bg-primary border border-border-subtle rounded-lg w-full max-w-xs p-6 shadow-2xl space-y-4 font-mono text-xs text-text-primary text-center">
